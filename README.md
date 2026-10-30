@@ -12,7 +12,7 @@
 
 ---
 
-## 🌌 Overview
+##  Overview
 
 Modern microservice architectures generate hundreds of noisy, cascading alerts within seconds of a critical failure. On-call SREs are woken up at 3 AM to sift through thousands of log lines, correlated APM spans, and cryptic stack traces.
 
@@ -28,7 +28,7 @@ All wrapped in an **Interstellar Cosmic Command Cockpit** featuring dynamic canv
 
 ---
 
-## 🤖 The Multi-Agent Squad
+##  The Multi-Agent Squad
 
 ```mermaid
 flowchart TD
@@ -63,31 +63,31 @@ flowchart TD
     Execute --> PostMortem
 ```
 
-### 1. 🛡️ Sentinel (Triage & Correlator)
+### 1.  Sentinel (Triage & Correlator)
 - Deduplicates alert storms and correlates disparate monitoring signals into a single unified incident.
 - Classifies severity (`P1 - CRITICAL`, `P2 - MAJOR`) and calculates the blast radius.
 
-### 2. 🔍 Scout (Log & Anomaly Investigator)
+### 2. Scout (Log & Anomaly Investigator)
 - Deep-dives into container logs, traces, and metrics collectors.
 - Extracts critical stack traces, out-of-memory errors, and deadlocked threads.
 
-### 3. 🔮 Oracle (RCA & Hypothesis Engine)
+### 3. Oracle (RCA & Hypothesis Engine)
 - Synthesizes the causal chain across the microservice topology.
 - Formulates high-confidence root-cause explanations (e.g., leaked unclosed JDBC connections, unbounded hash maps).
 
-### 4. ⚙️ Armorer (Remediation & Playbook Engineer)
+### 4.  Armorer (Remediation & Playbook Engineer)
 - Drafts surgical Kubernetes patches (`kubectl patch configmap`, canary rollbacks).
 - Generates Git-style unified configuration diffs, assigns risk scores (`LOW`/`MEDIUM`/`HIGH`), and prepares instant rollbacks.
 
-### 5. ⭐ Commander (Human Approval & Post-Mortem Generator)
+### 5.  Commander (Human Approval & Post-Mortem Generator)
 - Holds execution until an authorized human engineer clicks **"Authorize & Execute"**.
 - Verifies cluster pod recovery and auto-generates a Markdown Post-Mortem with preventative action items.
 
 ---
 
-## 🧪 Built-in Chaos Scenarios (1-Click Demos)
+##  Built-in Chaos Scenarios (1-Click Demos)
 
-Judges can instantly trigger real-world failure scenarios via the top navbar dropdown:
+
 
 1. **PostgreSQL Connection Pool Exhaustion & Thread Starvation**:
    - *Problem:* Leaked connection in `CheckoutHandler.java` exhausts 1000/1000 Postgres connection slots, causing cascading 500 spikes at the API Gateway.
@@ -103,7 +103,7 @@ Judges can instantly trigger real-world failure scenarios via the top navbar dro
 
 ---
 
-## 📁 Repository Structure
+## Repository Structure
 
 ```
 d:\hackk\
@@ -153,7 +153,7 @@ d:\hackk\
 
 ---
 
-## 🚀 Quickstart Guide
+##  Quickstart Guide
 
 ### Option 1: 1-Click Launch (Windows)
 Double-click `run_aegisops.bat` in the root folder, or execute:
@@ -184,16 +184,11 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+
 
 ---
 
-## 📤 How to Push this Repository to GitHub
 
-To push this codebase to your team's GitHub repository:
-
-1. **Create a new empty repository on GitHub** (e.g., `AegisOps`). Do **not** initialize it with a README or .gitignore (we already created them).
-2. Run these commands from the `d:\hackk` folder:
 
 ```powershell
 # Set your git identity (if not already set)
@@ -214,9 +209,9 @@ git push -u origin main
 
 ---
 
-## 🏆 Key Differentiators for Judges
+KEY DIFFERENCES
 
-- **Strict Theme Alignment:** Perfectly matches **Theme 01: Agentic AI & Multi-Agent Systems** ("Incident response crew: Agents triage alerts, investigate logs, propose a fix and wait for human approval").
+-  **Theme 01: Agentic AI & Multi-Agent Systems** ("Incident response crew: Agents triage alerts, investigate logs, propose a fix and wait for human approval").
 - **True Multi-Agent Collaboration:** Distinct specialized roles with independent tool sets rather than a monolithic chatbot.
 - **Human-in-the-Loop Safety:** Autonomous triage and root-cause analysis, but gated execution with unified diff inspections and rollback mechanisms.
 - **Interstellar Cosmic UX:** Cinematic dark-mode SRE command center with canvas starfields, shooting stars, and glassmorphic telemetry cards.
