@@ -1,7 +1,7 @@
 import React from 'react';
-import { Server, Database, Globe, Network, AlertCircle, CheckCircle } from 'lucide-react';
+import { Server, Database, Globe, Network, AlertCircle, CheckCircle, Eye } from 'lucide-react';
 
-export default function CausalGraph({ topology }) {
+export default function CausalGraph({ topology, onSelectNode }) {
   if (!topology || !topology.nodes) return null;
 
   const getNodeIcon = (type) => {
@@ -17,26 +17,26 @@ export default function CausalGraph({ topology }) {
     switch (status) {
       case 'failing':
         return {
-          bg: 'bg-rose-950/40 border-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.3)]',
+          bg: 'bg-rose-950/40 border-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.3)] hover:border-rose-400',
           badge: 'bg-rose-500/20 text-rose-300 border-rose-500/30',
           dot: 'bg-rose-500'
         };
       case 'degraded':
         return {
-          bg: 'bg-amber-950/40 border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.25)]',
+          bg: 'bg-amber-950/40 border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.25)] hover:border-amber-400',
           badge: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
           dot: 'bg-amber-500'
         };
       case 'remediated':
       case 'healthy':
         return {
-          bg: 'bg-emerald-950/30 border-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.2)]',
+          bg: 'bg-emerald-950/30 border-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.2)] hover:border-emerald-400',
           badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
           dot: 'bg-emerald-500'
         };
       default:
         return {
-          bg: 'bg-space-900/60 border-slate-700/60',
+          bg: 'bg-space-900/60 border-slate-700/60 hover:border-slate-500',
           badge: 'bg-slate-700/40 text-slate-300 border-slate-600',
           dot: 'bg-slate-400'
         };
@@ -52,29 +52,33 @@ export default function CausalGraph({ topology }) {
             Topology & Blast Radius Map
           </h3>
         </div>
-        <span className="text-[11px] font-mono text-slate-400">
-          {topology.nodes.length} Components Monitored
+        <span className="text-[11px] font-mono text-cyan-400/90 flex items-center space-x-1">
+          <Eye className="w-3 h-3" />
+          <span>Click node to inspect</span>
         </span>
       </div>
 
-      {/* Grid of Microservice Nodes */}
+      {/* Grid of Microservice Nodes (Clickable) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 flex-1">
         {topology.nodes.map((node) => {
           const Icon = getNodeIcon(node.type);
           const style = getStatusStyles(node.status);
 
           return (
-            <div
+            <button
               key={node.id}
-              className={`p-3.5 rounded-xl border transition-all duration-300 relative overflow-hidden ${style.bg}`}
+              onClick={() => onSelectNode && onSelectNode(node)}
+              className={`p-3.5 rounded-xl border text-left transition-all duration-300 relative overflow-hidden cursor-pointer group active:scale-95 ${style.bg}`}
             >
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center space-x-2.5">
-                  <div className="p-2 rounded-lg bg-space-950/60 text-cyan-400 border border-slate-800">
+                  <div className="p-2 rounded-lg bg-space-950/60 text-cyan-400 border border-slate-800 group-hover:border-cyan-500/40 transition-all">
                     <Icon className="w-4 h-4" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-slate-100">{node.name}</h4>
+                    <h4 className="text-xs font-bold text-slate-100 group-hover:text-cyan-300 transition-colors">
+                      {node.name}
+                    </h4>
                     <span className="text-[10px] uppercase font-mono text-slate-400 tracking-wider">
                       {node.type}
                     </span>
@@ -103,7 +107,7 @@ export default function CausalGraph({ topology }) {
                 </div>
               </div>
 
-            </div>
+            </button>
           );
         })}
       </div>
@@ -125,4 +129,3 @@ export default function CausalGraph({ topology }) {
     </div>
   );
 }
-

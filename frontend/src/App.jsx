@@ -9,6 +9,7 @@ import RemediationCockpit from './components/RemediationCockpit';
 import TelemetryHUD from './components/TelemetryHUD';
 import PostMortemModal from './components/PostMortemModal';
 import CustomLogModal from './components/CustomLogModal';
+import NodeInspectorModal from './components/NodeInspectorModal';
 
 // Dynamic connection endpoints with automatic fallback
 const getApiBase = () => {
@@ -44,6 +45,7 @@ export default function App() {
   const [backendOnline, setBackendOnline] = useState(true);
   const [isPostMortemOpen, setIsPostMortemOpen] = useState(false);
   const [isCustomLogModalOpen, setIsCustomLogModalOpen] = useState(false);
+  const [selectedNode, setSelectedNode] = useState(null);
 
   // Fetch initial scenarios and active incident
   const refreshState = () => {
@@ -309,6 +311,7 @@ export default function App() {
           />
           <CausalGraph 
             topology={incident?.topology} 
+            onSelectNode={setSelectedNode}
           />
         </div>
 
@@ -339,6 +342,13 @@ export default function App() {
         onClose={() => setIsCustomLogModalOpen(false)}
         onSubmit={handleCustomLogSubmit}
         isSubmitting={loading}
+      />
+
+      {/* Microservice Pod Inspector Modal */}
+      <NodeInspectorModal
+        node={selectedNode}
+        isOpen={!!selectedNode}
+        onClose={() => setSelectedNode(null)}
       />
 
       {/* Cyber Footer */}
