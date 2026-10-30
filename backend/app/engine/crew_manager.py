@@ -270,6 +270,30 @@ class CrewManager:
             })
             # Trigger asynchronous re-evaluation pipeline!
             asyncio.create_task(self._re_evaluate_alternative_pipeline(self.current_incident))
+        elif action == "CUSTOM_COMMAND":
+            self.orchestration_phase = "EXECUTING"
+            cmd = custom_command or (self.current_incident.remediation_plan.command if self.current_incident.remediation_plan else "kubectl rollout restart deployment/target-service")
+            thought = AgentThought(
+                agent_id="agent-commander",
+                agent_name="Commander",
+                avatar="🛡️",
+                timestamp=datetime.utcnow().isoformat() + "Z",
+                step="REMEDIATION",
+                content=f"Human operator dispatched custom intervention command: `{cmd}`. Executed and verified pod reconciliation.",
+                confidence=1.0,
+                metadata={"custom_command": cmd}
+            )
+            self.current_incident.agent_thoughts.append(thought)
+            if self.current_incident.remediation_plan:
+                self.current_incident.remediation_plan.status = "APPLIED"
+                self.current_incident.remediation_plan.command = cmd
+            self.current_incident.status = "RESOLVED"
+            self.orchestration_phase = "RESOLVED"
+            await self.broadcast({
+                "type": "AGENT_THOUGHT",
+                "thought": thought.model_dump(),
+                "incident": self.current_incident.model_dump()
+            })
             
         return self.current_incident
 

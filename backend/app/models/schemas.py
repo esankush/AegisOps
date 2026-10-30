@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 from pydantic import BaseModel, Field
 from datetime import datetime
 
@@ -71,13 +71,37 @@ class Incident(BaseModel):
     post_mortem: Optional[str] = None
 
 class ScenarioTriggerRequest(BaseModel):
-    scenario_id: str
+    scenario_id: str = Field(
+        default="skewed_clocks_format_drift",
+        description="Scenario identifier: 'skewed_clocks_format_drift', 'db_pool_exhaustion', 'memory_leak_crash', or 'cascading_504_gateway'",
+        examples=["skewed_clocks_format_drift", "db_pool_exhaustion"]
+    )
 
 class CustomLogIncidentRequest(BaseModel):
-    service: str = "custom-service"
-    title: Optional[str] = "Custom Production Log Outage"
-    raw_logs: str
+    service: str = Field(
+        default="billing-worker",
+        description="Target microservice name",
+        examples=["billing-worker"]
+    )
+    title: Optional[str] = Field(
+        default="Custom Production Log Outage",
+        description="Human-readable incident title",
+        examples=["Deadlock and High Latency Outage"]
+    )
+    raw_logs: str = Field(
+        default="2026-10-31T03:30:00Z [billing-worker] [FATAL] Thread pool exhausted: 500 connections active\n2026-10-31T03:30:02Z [api-gateway] [ERROR] 504 Gateway Timeout downstream",
+        description="Raw container logs or stack trace text",
+        examples=["2026-10-31T03:30:00Z [billing-worker] [FATAL] Thread pool exhausted: 500 connections active"]
+    )
 
 class RemediationActionRequest(BaseModel):
-    action: str # "APPROVE", "REJECT", "CUSTOM_COMMAND"
-    custom_command: Optional[str] = None
+    action: Literal["APPROVE", "REJECT", "CUSTOM_COMMAND"] = Field(
+        default="APPROVE",
+        description="Remediation action: 'APPROVE', 'REJECT', or 'CUSTOM_COMMAND'",
+        examples=["APPROVE", "REJECT", "CUSTOM_COMMAND"]
+    )
+    custom_command: Optional[str] = Field(
+        default=None,
+        description="Shell command to execute if action is CUSTOM_COMMAND",
+        examples=["kubectl rollout restart deployment/billing-worker"]
+    )

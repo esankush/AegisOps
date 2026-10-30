@@ -10,14 +10,20 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from app.config import settings
-from app.models.schemas import ScenarioTriggerRequest, CustomLogIncidentRequest, RemediationActionRequest
+from app.models.schemas import (
+    ScenarioTriggerRequest,
+    CustomLogIncidentRequest,
+    RemediationActionRequest,
+    Incident
+)
 from app.engine.simulator import SCENARIOS
 from app.engine.crew_manager import crew_manager
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version="1.0.0",
-    description="AegisOps: Autonomous Multi-Agent Incident Response & Triage Crew"
+    description="AegisOps: Autonomous Multi-Agent Incident Response & Triage Crew",
+    swagger_ui_parameters={"validatorUrl": None}
 )
 
 # Enable CORS for frontend Vite dev server & production
@@ -81,14 +87,18 @@ async def list_scenarios():
         if not sc_id.startswith("custom_")
     ]
 
-@app.post("/api/incident/trigger")
+@app.post("/api/incident/trigger", response_model=Incident)
 async def trigger_incident(req: ScenarioTriggerRequest):
     if req.scenario_id not in SCENARIOS:
-        raise HTTPException(status_code=404, detail="Scenario not found")
+        valid_ids = [k for k in SCENARIOS.keys() if not k.startswith("custom_")]
+        raise HTTPException(
+            status_code=404,
+            detail=f"Scenario '{req.scenario_id}' not found. Valid scenarios: {valid_ids}"
+        )
     incident = await crew_manager.trigger_scenario(req.scenario_id)
     return incident
 
-@app.post("/api/incident/custom")
+@app.post("/api/incident/custom", response_model=Incident)
 async def trigger_custom_incident(req: CustomLogIncidentRequest):
     if not req.raw_logs or not req.raw_logs.strip():
         raise HTTPException(status_code=400, detail="raw_logs cannot be empty")
@@ -99,14 +109,14 @@ async def trigger_custom_incident(req: CustomLogIncidentRequest):
     )
     return incident
 
-@app.get("/api/incident/current")
+@app.get("/api/incident/current", response_model=Incident)
 async def get_current_incident():
     if not crew_manager.current_incident:
         # Auto-initialize default scenario so UI is never blank
         await crew_manager.trigger_scenario("db_pool_exhaustion")
     return crew_manager.current_incident
 
-@app.post("/api/incident/action")
+@app.post("/api/incident/action", response_model=Incident)
 async def perform_action(req: RemediationActionRequest):
     try:
         updated = await crew_manager.handle_human_action(req.action, req.custom_command)
