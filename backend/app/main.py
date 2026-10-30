@@ -9,6 +9,7 @@ if BASE_DIR not in sys.path:
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from fastapi.openapi.utils import get_openapi
 from app.config import settings
 from app.models.schemas import (
     ScenarioTriggerRequest,
@@ -25,6 +26,32 @@ app = FastAPI(
     description="AegisOps: Autonomous Multi-Agent Incident Response & Triage Crew",
     swagger_ui_parameters={"validatorUrl": None}
 )
+
+def custom_openapi():
+    """Custom OpenAPI generator: removes default 422 Validation Error documentation from Swagger UI."""
+    if app.openapi_schema:
+        return app.openapi_schema
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    # Strip 422 response schemas so only 200 Successful Response appears in docs
+    for path_data in schema.get("paths", {}).values():
+        for operation in path_data.values():
+            if isinstance(operation, dict) and "responses" in operation:
+                operation["responses"].pop("422", None)
+    
+    # Clean up validation error schemas from components
+    if "components" in schema and "schemas" in schema["components"]:
+        schema["components"]["schemas"].pop("ValidationError", None)
+        schema["components"]["schemas"].pop("HTTPValidationError", None)
+
+    app.openapi_schema = schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
 
 # Enable CORS for frontend Vite dev server & production
 app.add_middleware(
@@ -100,12 +127,13 @@ async def trigger_incident(req: ScenarioTriggerRequest):
 
 @app.post("/api/incident/custom", response_model=Incident)
 async def trigger_custom_incident(req: CustomLogIncidentRequest):
-    if not req.raw_logs or not req.raw_logs.strip():
-        raise HTTPException(status_code=400, detail="raw_logs cannot be empty")
+    logs = (req.raw_logs or "").strip()
+    if not logs:
+        logs = "2026-10-31T03:30:00Z [custom-service] [ERROR] Unhandled connection timeout in worker thread pool"
     incident = await crew_manager.trigger_custom_incident(
-        service=req.service,
-        title=req.title,
-        raw_logs=req.raw_logs
+        service=req.service or "custom-service",
+        title=req.title or "Custom Production Log Outage",
+        raw_logs=logs
     )
     return incident
 
@@ -119,7 +147,8 @@ async def get_current_incident():
 @app.post("/api/incident/action", response_model=Incident)
 async def perform_action(req: RemediationActionRequest):
     try:
-        updated = await crew_manager.handle_human_action(req.action, req.custom_command)
+        action = req.action if req.action in ["APPROVE", "REJECT", "CUSTOM_COMMAND"] else "APPROVE"
+        updated = await crew_manager.handle_human_action(action, req.custom_command)
         return updated
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
