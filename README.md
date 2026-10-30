@@ -191,20 +191,6 @@ npm run dev
 
 
 ```powershell
-# Set your git identity (if not already set)
-git config --global user.name "Your Name"
-git config --global user.email "your.email@example.com"
-
-# Stage all files and create the initial commit
-git add .
-git commit -m "feat: initial commit of AegisOps Autonomous Multi-Agent Incident Response Crew"
-
-# Add your GitHub remote repository (replace with your repo URL)
-git branch -M main
-git remote add origin https://github.com/<YOUR-USERNAME>/<YOUR-REPO-NAME>.git
-
-# Push the repository
-git push -u origin main
 ```
 
 ---
