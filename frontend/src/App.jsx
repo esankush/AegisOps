@@ -10,8 +10,23 @@ import TelemetryHUD from './components/TelemetryHUD';
 import PostMortemModal from './components/PostMortemModal';
 import CustomLogModal from './components/CustomLogModal';
 
-const API_BASE = 'http://localhost:8000/api';
-const WS_URL = 'ws://localhost:8000/ws/warroom';
+// Dynamic connection endpoints with automatic fallback
+const getApiBase = () => {
+  if (typeof window !== 'undefined' && window.location.hostname) {
+    return `http://${window.location.hostname}:8000/api`;
+  }
+  return 'http://localhost:8000/api';
+};
+
+const getWsUrl = () => {
+  if (typeof window !== 'undefined' && window.location.hostname) {
+    return `ws://${window.location.hostname}:8000/ws/warroom`;
+  }
+  return 'ws://localhost:8000/ws/warroom';
+};
+
+const API_BASE = getApiBase();
+const WS_URL = getWsUrl();
 
 export default function App() {
   const [scenarios, setScenarios] = useState([
@@ -21,25 +36,53 @@ export default function App() {
   ]);
   const [currentScenario, setCurrentScenario] = useState('db_pool_exhaustion');
   const [incident, setIncident] = useState(null);
+  const [orchestrationPhase, setOrchestrationPhase] = useState('IDLE');
+  const [orchestrationMessage, setOrchestrationMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
+  const [backendOnline, setBackendOnline] = useState(true);
   const [isPostMortemOpen, setIsPostMortemOpen] = useState(false);
   const [isCustomLogModalOpen, setIsCustomLogModalOpen] = useState(false);
 
   // Fetch initial scenarios and active incident
-  useEffect(() => {
+  const refreshState = () => {
     fetch(`${API_BASE}/scenarios`)
       .then(res => res.json())
       .then(data => {
         if (data && data.length > 0) setScenarios(data);
+        setBackendOnline(true);
       })
-      .catch(err => console.log('Using default scenarios'));
+      .catch(() => {
+        // Fallback to Vite proxy
+        fetch('/api/scenarios')
+          .then(res => res.json())
+          .then(data => {
+            if (data && data.length > 0) setScenarios(data);
+            setBackendOnline(true);
+          })
+          .catch(() => setBackendOnline(false));
+      });
 
     fetch(`${API_BASE}/incident/current`)
       .then(res => res.json())
-      .then(data => setIncident(data))
-      .catch(err => console.log('Waiting for backend engine...'));
+      .then(data => {
+        setIncident(data);
+        setBackendOnline(true);
+      })
+      .catch(() => {
+        fetch('/api/incident/current')
+          .then(res => res.json())
+          .then(data => {
+            setIncident(data);
+            setBackendOnline(true);
+          })
+          .catch(() => setBackendOnline(false));
+      });
+  };
+
+  useEffect(() => {
+    refreshState();
   }, []);
 
   // WebSocket for real-time live war room updates
@@ -53,6 +96,7 @@ export default function App() {
 
         ws.onopen = () => {
           setWsConnected(true);
+          setBackendOnline(true);
         };
 
         ws.onmessage = (event) => {
@@ -60,6 +104,11 @@ export default function App() {
             const data = JSON.parse(event.data);
             if (data.type === 'INCIDENT_CREATED' || data.type === 'INCIDENT_UPDATE') {
               setIncident(data.incident);
+              if (data.phase) setOrchestrationPhase(data.phase);
+            } else if (data.type === 'ORCHESTRATION_PHASE') {
+              setOrchestrationPhase(data.phase);
+              setOrchestrationMessage(data.message || '');
+              if (data.incident) setIncident(data.incident);
             } else if (data.type === 'AGENT_THOUGHT') {
               setIncident(data.incident);
             }
@@ -170,6 +219,54 @@ export default function App() {
       {/* Main War Room Body */}
       <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
         
+        {/* Backend Offline Warning Banner (if offline) */}
+        {!backendOnline && (
+          <div className="bg-rose-500/20 border border-rose-500/40 rounded-xl p-3 flex items-center justify-between text-xs text-rose-300">
+            <div className="flex items-center space-x-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
+              <span className="font-semibold">Backend Engine Offline (Port 8000):</span>
+              <span>Double-click <code className="bg-space-950 px-1.5 py-0.5 rounded text-rose-200">run_aegisops.bat</code> or run <code className="bg-space-950 px-1.5 py-0.5 rounded text-rose-200">backend\run_backend.bat</code>.</span>
+            </div>
+            <button 
+              onClick={refreshState}
+              className="px-3 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white font-mono text-xs"
+            >
+              Retry Link
+            </button>
+          </div>
+        )}
+
+        {/* Multi-Agent Orchestration Stepper Bar */}
+        <div className="glass-panel rounded-xl px-5 py-3 border border-cyan-500/30 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+          <div className="flex items-center space-x-2">
+            <span className="text-[11px] uppercase tracking-wider text-cyan-400 font-bold">Crew Orchestration:</span>
+            {orchestrationMessage && (
+              <span className="text-slate-300 font-sans text-xs italic">"{orchestrationMessage}"</span>
+            )}
+          </div>
+          <div className="flex items-center space-x-3 text-[11px]">
+            <span className={`px-2 py-0.5 rounded ${incident?.agent_thoughts?.some(t => t.agent_id === 'agent-sentinel') ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'text-slate-500'}`}>
+              1. Triage
+            </span>
+            <span className="text-slate-600">→</span>
+            <span className={`px-2 py-0.5 rounded ${incident?.agent_thoughts?.some(t => t.agent_id === 'agent-scout') ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40' : 'text-slate-500'}`}>
+              2. Investigate
+            </span>
+            <span className="text-slate-600">→</span>
+            <span className={`px-2 py-0.5 rounded ${incident?.agent_thoughts?.some(t => t.agent_id === 'agent-oracle') ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40' : 'text-slate-500'}`}>
+              3. RCA
+            </span>
+            <span className="text-slate-600">→</span>
+            <span className={`px-2 py-0.5 rounded ${incident?.agent_thoughts?.some(t => t.agent_id === 'agent-armorer') ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'text-slate-500'}`}>
+              4. Playbook
+            </span>
+            <span className="text-slate-600">→</span>
+            <span className={`px-2 py-0.5 rounded ${incident?.status === 'RESOLVED' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'text-slate-500'}`}>
+              5. Resolve
+            </span>
+          </div>
+        </div>
+
         {/* Incident Summary Banner */}
         <IncidentHeader incident={incident} />
 

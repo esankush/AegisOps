@@ -1,5 +1,7 @@
 import asyncio
-from typing import Dict, List, Optional
+import json
+from typing import Dict, List, Optional, Any
+from datetime import datetime
 from fastapi import WebSocket
 from app.models.schemas import Incident, AgentThought
 from app.engine.simulator import create_incident_from_scenario, create_incident_from_custom_logs
@@ -9,19 +11,43 @@ from app.agents.oracle import OracleAgent
 from app.agents.armorer import ArmorerAgent
 from app.agents.commander import CommanderAgent
 
+class CrewBlackboard:
+    """Shared working memory and inter-agent communication bus."""
+    def __init__(self, incident: Incident):
+        self.incident_id = incident.id
+        self.triage_brief: Dict[str, Any] = {}
+        self.investigation_findings: Dict[str, Any] = {}
+        self.rca_hypotheses: List[Dict[str, Any]] = []
+        self.proposed_playbooks: List[Dict[str, Any]] = []
+        self.inter_agent_messages: List[Dict[str, Any]] = []
+
+    def post_message(self, sender: str, recipient: str, message: str, payload: Optional[Dict[str, Any]] = None):
+        self.inter_agent_messages.append({
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "sender": sender,
+            "recipient": recipient,
+            "message": message,
+            "payload": payload or {}
+        })
+
 class CrewManager:
-    """Orchestrates multi-agent crew execution, incident state, and WebSocket broadcasting."""
+    """Advanced Multi-Agent Orchestrator with state machine, shared blackboard, and live event streaming."""
 
     def __init__(self):
         self.current_incident: Optional[Incident] = None
+        self.blackboard: Optional[CrewBlackboard] = None
         self.active_websockets: List[WebSocket] = []
+        self.orchestration_phase: str = "IDLE"
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_websockets.append(websocket)
+        
+        # Send current state immediately upon client connection
         if self.current_incident:
             await websocket.send_json({
                 "type": "INCIDENT_UPDATE",
+                "phase": self.orchestration_phase,
                 "incident": self.current_incident.model_dump()
             })
 
@@ -37,82 +63,127 @@ class CrewManager:
                 self.disconnect(ws)
 
     async def trigger_scenario(self, scenario_id: str) -> Incident:
-        # Create new incident from scenario definition
         incident = create_incident_from_scenario(scenario_id)
         self.current_incident = incident
+        self.blackboard = CrewBlackboard(incident)
+        self.orchestration_phase = "INITIALIZED"
         
         await self.broadcast({
             "type": "INCIDENT_CREATED",
+            "phase": self.orchestration_phase,
             "incident": incident.model_dump()
         })
         
-        # Launch multi-agent pipeline in background
-        asyncio.create_task(self._run_agent_pipeline(incident))
+        asyncio.create_task(self._orchestrate_crew_pipeline(incident))
         return incident
 
     async def trigger_custom_incident(self, service: str, title: str, raw_logs: str) -> Incident:
         incident = create_incident_from_custom_logs(service, title, raw_logs)
         self.current_incident = incident
+        self.blackboard = CrewBlackboard(incident)
+        self.orchestration_phase = "INITIALIZED"
         
         await self.broadcast({
             "type": "INCIDENT_CREATED",
+            "phase": self.orchestration_phase,
             "incident": incident.model_dump()
         })
         
-        asyncio.create_task(self._run_agent_pipeline(incident))
+        asyncio.create_task(self._orchestrate_crew_pipeline(incident))
         return incident
 
-    async def _run_agent_pipeline(self, incident: Incident):
-        incident.status = "ANALYZING"
-        await self.broadcast({
-            "type": "INCIDENT_UPDATE",
-            "incident": incident.model_dump()
-        })
+    async def _orchestrate_crew_pipeline(self, incident: Incident):
+        """Sequential multi-agent cognitive pipeline with state synchronization."""
+        try:
+            # Phase 1: TRIAGE (Sentinel)
+            self.orchestration_phase = "TRIAGING"
+            incident.status = "ANALYZING"
+            await self.broadcast({
+                "type": "ORCHESTRATION_PHASE",
+                "phase": "PHASE_1_TRIAGE",
+                "message": "Sentinel correlating telemetry signals & evaluating blast radius...",
+                "incident": incident.model_dump()
+            })
+            thought1 = await SentinelAgent.run(incident)
+            self.blackboard.post_message("Sentinel", "Scout", "Alert storm triaged. Ingesting container logs.", {"severity": incident.severity})
+            await self.broadcast({
+                "type": "AGENT_THOUGHT",
+                "thought": thought1.model_dump(),
+                "incident": incident.model_dump()
+            })
 
-        # Step 1: Sentinel (Triage)
-        thought1 = await SentinelAgent.run(incident)
-        await self.broadcast({
-            "type": "AGENT_THOUGHT",
-            "thought": thought1.model_dump(),
-            "incident": incident.model_dump()
-        })
+            # Phase 2: INVESTIGATION (Scout)
+            self.orchestration_phase = "INVESTIGATING"
+            await self.broadcast({
+                "type": "ORCHESTRATION_PHASE",
+                "phase": "PHASE_2_INVESTIGATION",
+                "message": "Scout inspecting traces, error logs, and metric deviations...",
+                "incident": incident.model_dump()
+            })
+            thought2 = await ScoutAgent.run(incident)
+            self.blackboard.post_message("Scout", "Oracle", "Faulty stack trace isolated. Handing off to hypothesis engine.", thought2.metadata)
+            await self.broadcast({
+                "type": "AGENT_THOUGHT",
+                "thought": thought2.model_dump(),
+                "incident": incident.model_dump()
+            })
 
-        # Step 2: Scout (Investigation)
-        thought2 = await ScoutAgent.run(incident)
-        await self.broadcast({
-            "type": "AGENT_THOUGHT",
-            "thought": thought2.model_dump(),
-            "incident": incident.model_dump()
-        })
+            # Phase 3: ROOT CAUSE ANALYSIS (Oracle)
+            self.orchestration_phase = "RCA"
+            await self.broadcast({
+                "type": "ORCHESTRATION_PHASE",
+                "phase": "PHASE_3_RCA",
+                "message": "Oracle constructing causal graph and synthesizing root cause...",
+                "incident": incident.model_dump()
+            })
+            thought3 = await OracleAgent.run(incident)
+            self.blackboard.post_message("Oracle", "Armorer", "Root cause established. Requesting surgical playbook.", {"root_cause": incident.root_cause_summary})
+            await self.broadcast({
+                "type": "AGENT_THOUGHT",
+                "thought": thought3.model_dump(),
+                "incident": incident.model_dump()
+            })
 
-        # Step 3: Oracle (RCA)
-        thought3 = await OracleAgent.run(incident)
-        await self.broadcast({
-            "type": "AGENT_THOUGHT",
-            "thought": thought3.model_dump(),
-            "incident": incident.model_dump()
-        })
+            # Phase 4: REMEDIATION DESIGN & HUMAN GATE (Armorer)
+            self.orchestration_phase = "AWAITING_APPROVAL"
+            await self.broadcast({
+                "type": "ORCHESTRATION_PHASE",
+                "phase": "PHASE_4_REMEDIATION",
+                "message": "Armorer formulating surgical patch, unified diff & staging rollback...",
+                "incident": incident.model_dump()
+            })
+            thought4 = await ArmorerAgent.run(incident)
+            self.blackboard.post_message("Armorer", "Commander", "Hotfix staged. Pausing at Human Approval Gate.", {"plan_id": incident.remediation_plan.id if incident.remediation_plan else None})
+            await self.broadcast({
+                "type": "AGENT_THOUGHT",
+                "thought": thought4.model_dump(),
+                "incident": incident.model_dump()
+            })
 
-        # Step 4: Armorer (Remediation Plan)
-        thought4 = await ArmorerAgent.run(incident)
-        await self.broadcast({
-            "type": "AGENT_THOUGHT",
-            "thought": thought4.model_dump(),
-            "incident": incident.model_dump()
-        })
+        except Exception as e:
+            print(f"[Orchestrator Error] Pipeline execution failed: {e}")
 
     async def handle_human_action(self, action: str, custom_command: Optional[str] = None) -> Incident:
         if not self.current_incident:
             raise ValueError("No active incident to act upon.")
             
         if action == "APPROVE":
+            self.orchestration_phase = "EXECUTING"
+            await self.broadcast({
+                "type": "ORCHESTRATION_PHASE",
+                "phase": "PHASE_5_EXECUTION",
+                "message": "Human authorization confirmed. Applying surgical patch to cluster...",
+                "incident": self.current_incident.model_dump()
+            })
             thought = await CommanderAgent.execute_approved_remediation(self.current_incident)
+            self.orchestration_phase = "RESOLVED"
             await self.broadcast({
                 "type": "AGENT_THOUGHT",
                 "thought": thought.model_dump(),
                 "incident": self.current_incident.model_dump()
             })
         elif action == "REJECT":
+            self.orchestration_phase = "REJECTED"
             thought = await CommanderAgent.reject_remediation(self.current_incident)
             await self.broadcast({
                 "type": "AGENT_THOUGHT",
@@ -123,4 +194,3 @@ class CrewManager:
         return self.current_incident
 
 crew_manager = CrewManager()
-

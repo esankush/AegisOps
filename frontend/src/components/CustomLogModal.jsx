@@ -145,3 +145,4 @@ export default function CustomLogModal({ isOpen, onClose, onSubmit, isSubmitting
     </div>
   );
 }
+
