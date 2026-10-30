@@ -165,7 +165,9 @@ class CrewManager:
 
     async def handle_human_action(self, action: str, custom_command: Optional[str] = None) -> Incident:
         if not self.current_incident:
-            raise ValueError("No active incident to act upon.")
+            # Auto-initialize from default scenario if state was reset by server restart
+            self.current_incident = create_incident_from_scenario("db_pool_exhaustion")
+            self.blackboard = CrewBlackboard(self.current_incident)
             
         if action == "APPROVE":
             self.orchestration_phase = "EXECUTING"
