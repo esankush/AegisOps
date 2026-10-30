@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { X, FileCode, Play, Sparkles, AlertCircle, Cpu, Server, Database, ShieldAlert, Terminal, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, FileCode, Play, Sparkles, AlertCircle, Cpu, Server, Database, ShieldAlert, Terminal, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
 
 const REAL_WORLD_PRESETS = [
   {
-    label: "🐧 Linux Kernel OOM Panic",
-    desc: "Host memory starvation triggering kernel oom-killer on mysqld",
+    label: "🐧 Linux Kernel OOM",
+    badge: "dmesg",
     service: "mysqld",
     title: "Linux Kernel OOM Killer: mysqld Terminated (Exit 137)",
     logs: `kernel: [ 1420.312948] Out of memory: Kill process 18429 (mysqld) score 892 or sacrifice child
@@ -14,16 +14,16 @@ systemd[1]: mysqld.service: Failed with result 'oom-kill'.
 systemd[1]: mysqld.service: Consumed 4min 12.891s CPU time.`
   },
   {
-    label: "🌐 Nginx 502 Bad Gateway",
-    desc: "Upstream socket connection refused on internal backend port 8080",
+    label: "🌐 Nginx 502 Refused",
+    badge: "error.log",
     service: "nginx-ingress",
     title: "Nginx Ingress 502 Bad Gateway: Upstream Socket Refused",
     logs: `2026/10/31 03:22:15 [error] 14221#14221: *8912 connect() failed (111: Connection refused) while connecting to upstream, client: 192.168.1.100, server: api.production.internal, request: "POST /v1/checkout HTTP/1.1", upstream: "http://127.0.0.1:8080/v1/checkout", host: "api.production.internal"
 2026/10/31 03:22:16 [error] 14221#14221: *8915 no live upstreams while connecting to upstream, client: 192.168.1.102, server: api.production.internal, request: "GET /healthz HTTP/1.1", upstream: "http://app_backend/healthz"`
   },
   {
-    label: "🗄️ PostgreSQL Connection Exhaustion",
-    desc: "Active transaction pool saturation blocking incoming write queries",
+    label: "🗄️ Postgres Pool Saturation",
+    badge: "sql-error",
     service: "postgresql-primary",
     title: "PostgreSQL Pool Saturation: Remaining Connection Slots Reserved",
     logs: `2026-10-31 03:30:12.891 UTC [postgres] [FATAL]: remaining connection slots are reserved for non-replication superuser connections
@@ -31,8 +31,8 @@ systemd[1]: mysqld.service: Consumed 4min 12.891s CPU time.`
 2026-10-31 03:30:15.002 UTC [api-gateway] [ERROR]: HTTP 500 Internal Server Error: failed to acquire connection from pool within 5000ms timeout`
   },
   {
-    label: "📦 Kubernetes CrashLoopBackOff",
-    desc: "Container pod terminated by Kubelet due to memory limits",
+    label: "📦 K8s CrashLoopBackOff",
+    badge: "kubelet",
     service: "payment-worker",
     title: "Kubernetes Pod CrashLoopBackOff: Exit Code 137 (OOMKilled)",
     logs: `2026-10-31T03:32:01.002Z kubelet node-03: Container payment-worker in pod payment-worker-78fb9c-xz21 failed liveness probe, will be restarted
@@ -40,8 +40,8 @@ systemd[1]: mysqld.service: Consumed 4min 12.891s CPU time.`
 2026-10-31T03:32:15.892Z k8s-events: Back-off restarting failed container payment-worker in pod payment-worker-78fb9c-xz21_default`
   },
   {
-    label: "⚡ Unstructured / Arbitrary Stream",
-    desc: "Corrupted stream or raw unformatted syntax (Mentor Challenge #2)",
+    label: "⚡ Unstructured Drift (\"type shit\")",
+    badge: "polymorphic",
     service: "telemetry-pipeline",
     title: "Unrecognized Polymorphic Telemetry Stream",
     logs: `CRITICAL_PANIC_CORE_DUMP_0x89AA12: corrupted frame in buffer slot 92
@@ -53,8 +53,8 @@ unknown payload format: [RAW_STREAM_NON_RFC] bytes=0x4141414141414141`
 export default function CustomLogModal({ isOpen, onClose, onSubmit, isSubmitting }) {
   const [logs, setLogs] = useState('');
   const [manualOverride, setManualOverride] = useState(false);
-  const [customService, setCustomService] = useState('');
-  const [customTitle, setCustomTitle] = useState('');
+  const [overrideService, setOverrideService] = useState('');
+  const [overrideTitle, setOverrideTitle] = useState('');
 
   // Live Auto-Detection Engine
   const detection = useMemo(() => {
@@ -66,9 +66,9 @@ export default function CustomLogModal({ isOpen, onClose, onSubmit, isSubmitting
       const match = logs.match(/kill(?:ed)?\s+process\s+\d+\s+\(([\w\.\-]+)\)/i);
       const proc = match ? match[1] : 'mysqld';
       return {
-        target: `${proc} (Linux Kernel OOM)`,
+        target: `${proc} (Linux Host Kernel)`,
         service: proc,
-        category: "Linux OS Kernel Crash",
+        category: "Linux OS Kernel Memory Starvation",
         severity: "P1 - CRITICAL",
         icon: Cpu,
         color: "text-rose-400 bg-rose-500/10 border-rose-500/30",
@@ -81,11 +81,11 @@ export default function CustomLogModal({ isOpen, onClose, onSubmit, isSubmitting
       return {
         target: "nginx-ingress (Reverse Proxy)",
         service: "nginx-ingress",
-        category: "Ingress Gateway Outage",
+        category: "Ingress Gateway Outage (TCP 111 Refused)",
         severity: "P1 - CRITICAL",
         icon: Server,
         color: "text-amber-400 bg-amber-500/10 border-amber-500/30",
-        inferredTitle: "Nginx Ingress 502 Bad Gateway: Upstream Connection Refused"
+        inferredTitle: "Nginx Ingress 502 Bad Gateway: Upstream Socket Refused"
       };
     }
 
@@ -122,7 +122,7 @@ export default function CustomLogModal({ isOpen, onClose, onSubmit, isSubmitting
       return {
         target: `Pod: ${pod} (Kubernetes)`,
         service: pod,
-        category: "Kubernetes Container Termination",
+        category: "Kubernetes Container Termination (Exit 137)",
         severity: "P1 - CRITICAL",
         icon: Server,
         color: "text-rose-400 bg-rose-500/10 border-rose-500/30",
@@ -134,7 +134,7 @@ export default function CustomLogModal({ isOpen, onClose, onSubmit, isSubmitting
     return {
       target: "telemetry-pipeline (Auto-Inferred)",
       service: "telemetry-pipeline",
-      category: "Polymorphic Unstructured Anomaly",
+      category: "Polymorphic Unstructured Anomaly (High Uncertainty)",
       severity: "P2 - MAJOR",
       icon: ShieldAlert,
       color: "text-cyan-300 bg-cyan-500/10 border-cyan-500/30",
@@ -146,20 +146,26 @@ export default function CustomLogModal({ isOpen, onClose, onSubmit, isSubmitting
 
   const handleApplyPreset = (preset) => {
     setLogs(preset.logs);
-    setCustomService(preset.service);
-    setCustomTitle(preset.title);
+    setOverrideService('');
+    setOverrideTitle('');
+  };
+
+  const handleClear = () => {
+    setLogs('');
+    setOverrideService('');
+    setOverrideTitle('');
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!logs.trim()) return;
 
-    const finalService = manualOverride && customService.trim() 
-      ? customService.trim() 
+    const finalService = manualOverride && overrideService.trim() 
+      ? overrideService.trim() 
       : (detection ? detection.service : "auto-detected-service");
 
-    const finalTitle = manualOverride && customTitle.trim() 
-      ? customTitle.trim() 
+    const finalTitle = manualOverride && overrideTitle.trim() 
+      ? overrideTitle.trim() 
       : (detection ? detection.inferredTitle : "Production Incident Outage");
 
     onSubmit({
@@ -181,13 +187,13 @@ export default function CustomLogModal({ isOpen, onClose, onSubmit, isSubmitting
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-100 flex items-center space-x-2">
-                <span>Autonomous Crash & Log Triage</span>
+                <span>Paste Error Logs &amp; Crash Dumps</span>
                 <span className="text-[10px] font-mono font-normal bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full border border-cyan-500/40">
-                  Zero Configuration Required
+                  Zero Config Auto-Triage
                 </span>
               </h3>
               <p className="text-xs text-slate-400">
-                Paste any server crash logs, dmesg traces, or raw text — AegisOps auto-detects the system component & failure pattern
+                Paste any logs or type text — AegisOps dynamically extracts the failing process, builds topology, and stages the fix.
               </p>
             </div>
           </div>
@@ -203,52 +209,62 @@ export default function CustomLogModal({ isOpen, onClose, onSubmit, isSubmitting
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4 bg-space-950/90 text-xs overflow-y-auto">
           
-          {/* Quick Preset Buttons */}
+          {/* 1. PRIMARY PASTE AREA - FRONT AND CENTER */}
           <div>
-            <label className="block text-slate-300 font-mono mb-2 font-semibold flex items-center space-x-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Load Real-World Crash Scenarios:</span>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-slate-200 font-mono font-bold flex items-center space-x-1.5 text-xs">
+                <Terminal className="w-4 h-4 text-cyan-400" />
+                <span>Paste Any Server Crash Logs, dmesg, or Text:</span>
+              </label>
+
+              {logs.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  className="text-[11px] font-mono text-rose-400 hover:text-rose-300 flex items-center space-x-1"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Clear</span>
+                </button>
+              )}
+            </div>
+
+            <textarea
+              rows={8}
+              value={logs}
+              onChange={(e) => {
+                setLogs(e.target.value);
+                setOverrideService('');
+                setOverrideTitle('');
+              }}
+              placeholder="📋 Paste anything here! (e.g. Linux kernel panics, OOM killer traces, Nginx 502 errors, PostgreSQL locks, Python tracebacks, or raw unstructured text)..."
+              required
+              className="w-full bg-space-900/90 border border-slate-700 rounded-xl p-3.5 text-slate-100 font-mono text-xs focus:outline-none focus:border-cyan-400 leading-relaxed placeholder:text-slate-600 shadow-inner"
+            />
+          </div>
+
+          {/* 2. Sample Crash Shortcuts */}
+          <div>
+            <label className="block text-slate-400 font-mono mb-1.5 text-[11px] flex items-center space-x-1">
+              <Sparkles className="w-3 h-3 text-cyan-400" />
+              <span>Or click to test with real-world crash logs:</span>
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {REAL_WORLD_PRESETS.map((p, i) => (
                 <button
                   key={i}
                   type="button"
                   onClick={() => handleApplyPreset(p)}
-                  className="text-left p-2.5 rounded-xl bg-space-900 border border-slate-800 hover:border-cyan-500/50 hover:bg-space-850 transition-all text-slate-300 flex flex-col group"
+                  className="px-2.5 py-1.5 rounded-lg bg-space-900 hover:bg-space-800 border border-slate-800 hover:border-cyan-500/50 text-slate-300 hover:text-cyan-200 transition-all text-[11px] font-mono flex items-center space-x-1"
                 >
-                  <span className="font-semibold text-slate-200 group-hover:text-cyan-300 text-xs">{p.label}</span>
-                  <span className="text-[10px] text-slate-400 line-clamp-1">{p.desc}</span>
+                  <span>{p.label}</span>
+                  <span className="text-[9px] bg-slate-800 px-1 py-0.2 rounded text-slate-400">{p.badge}</span>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Textarea for Raw Logs */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-slate-300 font-mono font-semibold flex items-center space-x-1.5">
-                <Terminal className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Paste Crash Logs / Stack Trace / Raw Output:</span>
-              </label>
-              {logs.length > 0 && (
-                <span className="text-[11px] font-mono text-cyan-400">
-                  {logs.split('\n').filter(Boolean).length} lines detected
-                </span>
-              )}
-            </div>
-
-            <textarea
-              rows={7}
-              value={logs}
-              onChange={(e) => setLogs(e.target.value)}
-              placeholder="Paste any logs here (e.g. Linux kernel dmesg, Nginx 502, PostgreSQL connection errors, Python tracebacks, or raw unstructured text)..."
-              required
-              className="w-full bg-space-900/90 border border-slate-700 rounded-xl p-3 text-slate-200 font-mono text-xs focus:outline-none focus:border-cyan-400 leading-relaxed placeholder:text-slate-600"
-            />
-          </div>
-
-          {/* Live Auto-Detection Card */}
+          {/* 3. Live Real-Time Auto-Detection Card */}
           {detection && (
             <div className={`p-3.5 rounded-xl border flex items-start space-x-3 transition-all ${detection.color}`}>
               <detection.icon className="w-5 h-5 shrink-0 mt-0.5" />
@@ -262,37 +278,37 @@ export default function CustomLogModal({ isOpen, onClose, onSubmit, isSubmitting
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-300 font-mono">
-                  Classification: <span className="text-white font-semibold">{detection.category}</span>
+                  Failure Class: <span className="text-white font-semibold">{detection.category}</span>
                 </p>
                 <p className="text-[10px] text-slate-400">
-                  AegisOps will automatically map causal topology, evaluate epistemic uncertainty, and draft surgical remediation for <code className="text-cyan-300">{detection.service}</code> without requiring manual input.
+                  Target Service is automatically isolated to <code className="text-cyan-300 font-bold">{detection.service}</code>. No manual input required.
                 </p>
               </div>
             </div>
           )}
 
-          {/* Optional Manual Override Toggle */}
+          {/* 4. Optional Manual Override */}
           <div className="pt-1">
             <button
               type="button"
               onClick={() => setManualOverride(!manualOverride)}
               className="text-slate-400 hover:text-slate-200 font-mono text-[11px] flex items-center space-x-1"
             >
-              <span>Advanced: Override Target Microservice / Title Manually</span>
+              <span>Optional: Override Target Microservice / Title</span>
               {manualOverride ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
 
             {manualOverride && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 p-3 rounded-xl bg-space-900/60 border border-slate-800">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2 p-3 rounded-xl bg-space-900/60 border border-slate-800">
                 <div>
                   <label className="block text-slate-400 font-mono text-[10px] mb-1">
                     Custom Target Microservice:
                   </label>
                   <input
                     type="text"
-                    value={customService}
-                    onChange={(e) => setCustomService(e.target.value)}
-                    placeholder={detection ? detection.service : "e.g. billing-worker"}
+                    value={overrideService}
+                    onChange={(e) => setOverrideService(e.target.value)}
+                    placeholder={detection ? detection.service : "e.g. checkout-service"}
                     className="w-full bg-space-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 font-mono text-xs focus:outline-none focus:border-cyan-400"
                   />
                 </div>
@@ -302,9 +318,9 @@ export default function CustomLogModal({ isOpen, onClose, onSubmit, isSubmitting
                   </label>
                   <input
                     type="text"
-                    value={customTitle}
-                    onChange={(e) => setCustomTitle(e.target.value)}
-                    placeholder={detection ? detection.inferredTitle : "e.g. Memory Leak Outage"}
+                    value={overrideTitle}
+                    onChange={(e) => setOverrideTitle(e.target.value)}
+                    placeholder={detection ? detection.inferredTitle : "e.g. Database Connection Saturation"}
                     className="w-full bg-space-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-cyan-400"
                   />
                 </div>
@@ -328,7 +344,7 @@ export default function CustomLogModal({ isOpen, onClose, onSubmit, isSubmitting
               className="px-5 py-2.5 rounded-xl font-bold font-mono text-xs text-space-950 bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500 hover:opacity-90 active:scale-95 disabled:opacity-50 transition-all shadow-[0_0_20px_rgba(0,240,255,0.3)] flex items-center space-x-2"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
-              <span>{isSubmitting ? 'Crew Investigating...' : 'Deploy Autonomous Triage'}</span>
+              <span>{isSubmitting ? 'Crew Investigating...' : 'Analyze & Deploy Triage'}</span>
             </button>
           </div>
 

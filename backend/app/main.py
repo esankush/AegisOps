@@ -15,10 +15,12 @@ from app.models.schemas import (
     ScenarioTriggerRequest,
     CustomLogIncidentRequest,
     RemediationActionRequest,
+    ChatMessageRequest,
     Incident
 )
 from app.engine.simulator import SCENARIOS
 from app.engine.crew_manager import crew_manager
+from app.engine.ai_copilot import AICopilot
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -157,6 +159,12 @@ async def perform_action(req: RemediationActionRequest):
         return updated
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/chat")
+async def copilot_chat(req: ChatMessageRequest):
+    """Interactive AI Copilot endpoint: answer user questions about current cluster state & incident."""
+    reply = AICopilot.generate_response(req.message, crew_manager.current_incident)
+    return reply
 
 @app.websocket("/ws/warroom")
 async def warroom_websocket(websocket: WebSocket):

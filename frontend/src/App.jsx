@@ -10,6 +10,7 @@ import TelemetryHUD from './components/TelemetryHUD';
 import PostMortemModal from './components/PostMortemModal';
 import CustomLogModal from './components/CustomLogModal';
 import NodeInspectorModal from './components/NodeInspectorModal';
+import AIChatCopilot from './components/AIChatCopilot';
 
 // Dynamic connection endpoints with automatic fallback
 const getApiBase = () => {
@@ -350,6 +351,9 @@ export default function App() {
         isOpen={!!selectedNode}
         onClose={() => setSelectedNode(null)}
       />
+
+      {/* Interactive AI SRE Copilot Chatbot */}
+      <AIChatCopilot incident={incident} />
 
       {/* Cyber Footer */}
       <footer className="relative z-10 glass-panel border-t border-slate-800 py-4 px-6 text-center text-xs font-mono text-slate-500">

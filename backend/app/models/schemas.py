@@ -105,3 +105,10 @@ class RemediationActionRequest(BaseModel):
         description="Shell command to execute if action is CUSTOM_COMMAND",
         examples=["kubectl rollout restart deployment/billing-worker"]
     )
+
+class ChatMessageRequest(BaseModel):
+    message: str = Field(
+        default="Explain what caused this incident",
+        description="User question to the AI Copilot",
+        examples=["What is the root cause?", "Is it safe to execute the hotfix?"]
+    )
