@@ -130,3 +130,4 @@ export default function NodeInspectorModal({ node, isOpen, onClose }) {
     </div>
   );
 }
+

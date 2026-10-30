@@ -1,5 +1,5 @@
 import React from 'react';
-import { Wrench, CheckCircle2, XCircle, RotateCcw, AlertTriangle, ShieldCheck, Terminal } from 'lucide-react';
+import { Wrench, CheckCircle2, XCircle, RotateCcw, AlertTriangle, ShieldCheck, Terminal, Loader2 } from 'lucide-react';
 
 export default function RemediationCockpit({ remediation, incidentStatus, onAction, actionLoading }) {
   if (!remediation) {
@@ -108,18 +108,19 @@ export default function RemediationCockpit({ remediation, incidentStatus, onActi
               <span>Remediation Applied & Verified</span>
             </div>
           ) : isRejected ? (
-            <div className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/40 text-xs font-bold font-mono">
-              <XCircle className="w-4 h-4 text-rose-400" />
-              <span>Remediation Rejected by Human</span>
+            <div className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-bold font-mono animate-pulse">
+              <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
+              <span>Crew Re-evaluating Alternative Strategy...</span>
             </div>
           ) : (
             <>
               <button
                 onClick={() => onAction('REJECT')}
                 disabled={actionLoading}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-300 bg-space-900 border border-slate-700 hover:bg-slate-800 active:scale-95 transition-all disabled:opacity-50"
+                className="flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold text-slate-300 bg-space-900 border border-slate-700 hover:bg-space-800 active:scale-95 transition-all disabled:opacity-50"
               >
-                Reject & Re-evaluate
+                <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+                <span>Reject & Re-evaluate</span>
               </button>
               
               <button
@@ -138,4 +139,3 @@ export default function RemediationCockpit({ remediation, incidentStatus, onActi
     </div>
   );
 }
-

@@ -1,9 +1,10 @@
 import asyncio
 import json
+import uuid
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 from fastapi import WebSocket
-from app.models.schemas import Incident, AgentThought
+from app.models.schemas import Incident, AgentThought, RemediationPlan
 from app.engine.simulator import create_incident_from_scenario, create_incident_from_custom_logs
 from app.agents.sentinel import SentinelAgent
 from app.agents.scout import ScoutAgent
@@ -163,9 +164,78 @@ class CrewManager:
         except Exception as e:
             print(f"[Orchestrator Error] Pipeline execution failed: {e}")
 
+    async def _re_evaluate_alternative_pipeline(self, incident: Incident):
+        """Autonomous agent re-evaluation triggered when human rejects initial plan."""
+        try:
+            await asyncio.sleep(1.0)
+            
+            # Step 1: Oracle explores secondary hypothesis
+            thought_oracle = AgentThought(
+                agent_id="agent-oracle",
+                agent_name="Oracle",
+                avatar="🔮",
+                timestamp=datetime.utcnow().isoformat() + "Z",
+                step="RCA",
+                content="Human operator rejected primary plan. Re-evaluating topology for non-disruptive alternative: Bypassing pod rollout in favor of dynamic traffic draining and circuit breaker isolation.",
+                confidence=0.91,
+                metadata={"strategy": "ALTERNATIVE_PLAN_B", "focus": "zero_downtime_drain"}
+            )
+            incident.agent_thoughts.append(thought_oracle)
+            await self.broadcast({
+                "type": "AGENT_THOUGHT",
+                "thought": thought_oracle.model_dump(),
+                "incident": incident.model_dump()
+            })
+
+            await asyncio.sleep(1.2)
+
+            # Step 2: Armorer drafts Alternative Plan B
+            target_svc = incident.remediation_plan.target_service if incident.remediation_plan else "target-service"
+            alt_plan = RemediationPlan(
+                id=f"rem-alt-{uuid.uuid4().hex[:4]}",
+                title=f"Alternative Plan B: Traffic Draining & Concurrency Limiting ({target_svc})",
+                description="Zero-downtime remediation: Drain active HTTP/gRPC requests, throttle connection acquisition rate, and temporarily route new traffic to stable replica pool.",
+                target_service=target_svc,
+                command=f"kubectl annotate ingress/{target_svc} ingress.kubernetes.io/proxy-body-size='10m' && kubectl set env deployment/{target_svc} MAX_CONCURRENT_REQUESTS=50",
+                patch_diff=f"--- a/deployments/{target_svc}-env.yaml\n+++ b/deployments/{target_svc}-env.yaml\n@@ -8,3 +8,4 @@\n   env:\n+  - name: MAX_CONCURRENT_REQUESTS\n+    value: \"50\"\n+  - name: CONNECTION_DRAIN_TIMEOUT_MS\n+    value: \"5000\"",
+                risk_level="LOW",
+                rollback_command=f"kubectl set env deployment/{target_svc} MAX_CONCURRENT_REQUESTS-",
+                estimated_recovery_time="15 seconds",
+                status="PENDING_APPROVAL"
+            )
+            incident.remediation_plan = alt_plan
+            incident.status = "AWAITING_APPROVAL"
+            self.orchestration_phase = "AWAITING_APPROVAL"
+
+            thought_armorer = AgentThought(
+                agent_id="agent-armorer",
+                agent_name="Armorer",
+                avatar="⚙️",
+                timestamp=datetime.utcnow().isoformat() + "Z",
+                step="REMEDIATION",
+                content=f"Alternative Plan B formulated: \"{alt_plan.title}\". Prepared non-disruptive traffic-drain patch with 15s recovery time. Submitted for human review.",
+                confidence=0.98,
+                metadata={"plan_id": alt_plan.id, "strategy": "ALTERNATIVE_B"}
+            )
+            incident.agent_thoughts.append(thought_armorer)
+
+            await self.broadcast({
+                "type": "ORCHESTRATION_PHASE",
+                "phase": "PHASE_4_REMEDIATION",
+                "message": "Alternative Plan B ready for human review.",
+                "incident": incident.model_dump()
+            })
+            await self.broadcast({
+                "type": "AGENT_THOUGHT",
+                "thought": thought_armorer.model_dump(),
+                "incident": incident.model_dump()
+            })
+
+        except Exception as e:
+            print(f"[Re-evaluation Error]: {e}")
+
     async def handle_human_action(self, action: str, custom_command: Optional[str] = None) -> Incident:
         if not self.current_incident:
-            # Auto-initialize from default scenario if state was reset by server restart
             self.current_incident = create_incident_from_scenario("db_pool_exhaustion")
             self.blackboard = CrewBlackboard(self.current_incident)
             
@@ -185,13 +255,21 @@ class CrewManager:
                 "incident": self.current_incident.model_dump()
             })
         elif action == "REJECT":
-            self.orchestration_phase = "REJECTED"
+            self.orchestration_phase = "RE-EVALUATING"
             thought = await CommanderAgent.reject_remediation(self.current_incident)
+            await self.broadcast({
+                "type": "ORCHESTRATION_PHASE",
+                "phase": "PHASE_3_RCA",
+                "message": "Plan rejected by operator. Crew re-evaluating alternative remediation strategies...",
+                "incident": self.current_incident.model_dump()
+            })
             await self.broadcast({
                 "type": "AGENT_THOUGHT",
                 "thought": thought.model_dump(),
                 "incident": self.current_incident.model_dump()
             })
+            # Trigger asynchronous re-evaluation pipeline!
+            asyncio.create_task(self._re_evaluate_alternative_pipeline(self.current_incident))
             
         return self.current_incident
 
