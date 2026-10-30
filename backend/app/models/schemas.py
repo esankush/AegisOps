@@ -61,6 +61,9 @@ class Incident(BaseModel):
     resolved_at: Optional[str] = None
     blast_radius: str
     root_cause_summary: Optional[str] = None
+    clock_skew_detected: Optional[str] = None
+    uncertainty_analysis: Optional[str] = None
+    where_to_look_next: Optional[List[str]] = Field(default_factory=list)
     alerts: List[Alert] = Field(default_factory=list)
     agent_thoughts: List[AgentThought] = Field(default_factory=list)
     topology: TopologyGraph
@@ -78,4 +81,3 @@ class CustomLogIncidentRequest(BaseModel):
 class RemediationActionRequest(BaseModel):
     action: str # "APPROVE", "REJECT", "CUSTOM_COMMAND"
     custom_command: Optional[str] = None
-

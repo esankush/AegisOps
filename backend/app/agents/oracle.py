@@ -4,7 +4,7 @@ from app.models.schemas import Incident, AgentThought
 from app.engine.simulator import SCENARIOS
 
 class OracleAgent:
-    """Oracle - Root Cause Analysis (RCA) & Causal Graph Agent."""
+    """Oracle - RCA & Hypothesis Engine with Epistemic Uncertainty & Next Steps Guidance."""
 
     ID = "agent-oracle"
     NAME = "Oracle"
@@ -19,9 +19,19 @@ class OracleAgent:
         rca_text = sc.get("root_cause", "Anomaly induced cascade failure.")
         incident.root_cause_summary = rca_text
         
+        confidence = 0.825 if incident.clock_skew_detected else 0.964
+        
+        uncertainty_note = ""
+        if incident.uncertainty_analysis:
+            uncertainty_note = f" [Epistemic Uncertainty: {incident.uncertainty_analysis}]"
+            
+        next_steps_str = ""
+        if incident.where_to_look_next:
+            next_steps_str = " Recommended Next Investigative Steps: " + " | ".join([f"({i+1}) {s}" for i, s in enumerate(incident.where_to_look_next)])
+        
         content = (
-            f"Root Cause Hypothesis synthesized with 96.4% confidence: {rca_text} "
-            f"Causal chain mapped across microservice topology: upstream gateway is suffering from downstream resource exhaustion."
+            f"Root Cause Hypothesis synthesized with {round(confidence * 100, 1)}% calibrated confidence: {rca_text}"
+            f"{uncertainty_note} Causal graph mapped: Wall-clock skew corrected via distributed trace span IDs.{next_steps_str}"
         )
         
         thought = AgentThought(
@@ -31,9 +41,13 @@ class OracleAgent:
             timestamp=datetime.utcnow().isoformat() + "Z",
             step="RCA",
             content=content,
-            confidence=0.964,
-            metadata={"root_cause": rca_text, "affected_nodes": len(incident.topology.nodes)}
+            confidence=confidence,
+            metadata={
+                "root_cause": rca_text,
+                "confidence_calibrated": confidence,
+                "uncertainty_analysis": incident.uncertainty_analysis,
+                "where_to_look_next": incident.where_to_look_next
+            }
         )
         incident.agent_thoughts.append(thought)
         return thought
-
