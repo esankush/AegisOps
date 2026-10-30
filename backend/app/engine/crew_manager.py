@@ -191,16 +191,43 @@ class CrewManager:
 
             # Step 2: Armorer drafts Alternative Plan B
             target_svc = incident.remediation_plan.target_service if incident.remediation_plan else "target-service"
+            sc_id = incident.scenario_id
+            
+            if "linux" in sc_id or "oom" in sc_id:
+                alt_title = f"Alternative Plan B: Host Swappiness Tuning & Memory Flush ({target_svc})"
+                alt_desc = "Non-disruptive kernel tuning: adjust vm.swappiness to 10 to reduce paging pressure and reload systemd unit."
+                alt_cmd = f"sudo sysctl -w vm.swappiness=10 && sudo systemctl daemon-reload && sudo systemctl restart {target_svc}"
+                alt_diff = "--- a/etc/sysctl.conf\n+++ b/etc/sysctl.conf\n@@ -30,2 +30,2 @@\n-vm.swappiness = 60\n+vm.swappiness = 10"
+                alt_rb = "sudo sysctl -w vm.swappiness=60"
+            elif "nginx" in sc_id:
+                alt_title = f"Alternative Plan B: Soft Proxy Reload & Connection Drain ({target_svc})"
+                alt_desc = "Gracefully reload Nginx workers without dropping active HTTP connections and failover to secondary socket."
+                alt_cmd = f"sudo nginx -s reload && sudo systemctl restart {target_svc}"
+                alt_diff = "--- a/etc/nginx/nginx.conf\n+++ b/etc/nginx/nginx.conf\n@@ -18,2 +18,3 @@\n+proxy_next_upstream error timeout invalid_header;\n+proxy_connect_timeout 2s;"
+                alt_rb = "sudo nginx -s reload"
+            elif "postgres" in sc_id:
+                alt_title = f"Alternative Plan B: Dynamic Statement Timeout & Connection Shedding"
+                alt_desc = "Enforce 10-second statement timeout to automatically purge locked queries without restarting PostgreSQL daemon."
+                alt_cmd = "psql -U postgres -c \"ALTER SYSTEM SET statement_timeout = '10s'; SELECT pg_reload_conf();\""
+                alt_diff = "--- a/etc/postgresql/postgresql.conf\n+++ b/etc/postgresql/postgresql.conf\n@@ -80,1 +80,1 @@\n-statement_timeout = 0\n+statement_timeout = '10s'"
+                alt_rb = "psql -U postgres -c \"ALTER SYSTEM RESET statement_timeout; SELECT pg_reload_conf();\""
+            else:
+                alt_title = f"Alternative Plan B: Traffic Draining & Concurrency Limiting ({target_svc})"
+                alt_desc = "Zero-downtime remediation: Drain active HTTP/gRPC requests, throttle connection acquisition rate, and route new traffic to stable replica pool."
+                alt_cmd = f"kubectl annotate ingress/{target_svc} ingress.kubernetes.io/proxy-body-size='10m' && kubectl set env deployment/{target_svc} MAX_CONCURRENT_REQUESTS=50"
+                alt_diff = f"--- a/deployments/{target_svc}-env.yaml\n+++ b/deployments/{target_svc}-env.yaml\n@@ -8,3 +8,4 @@\n   env:\n+  - name: MAX_CONCURRENT_REQUESTS\n+    value: \"50\"\n+  - name: CONNECTION_DRAIN_TIMEOUT_MS\n+    value: \"5000\""
+                alt_rb = f"kubectl set env deployment/{target_svc} MAX_CONCURRENT_REQUESTS-"
+
             alt_plan = RemediationPlan(
                 id=f"rem-alt-{uuid.uuid4().hex[:4]}",
-                title=f"Alternative Plan B: Traffic Draining & Concurrency Limiting ({target_svc})",
-                description="Zero-downtime remediation: Drain active HTTP/gRPC requests, throttle connection acquisition rate, and temporarily route new traffic to stable replica pool.",
+                title=alt_title,
+                description=alt_desc,
                 target_service=target_svc,
-                command=f"kubectl annotate ingress/{target_svc} ingress.kubernetes.io/proxy-body-size='10m' && kubectl set env deployment/{target_svc} MAX_CONCURRENT_REQUESTS=50",
-                patch_diff=f"--- a/deployments/{target_svc}-env.yaml\n+++ b/deployments/{target_svc}-env.yaml\n@@ -8,3 +8,4 @@\n   env:\n+  - name: MAX_CONCURRENT_REQUESTS\n+    value: \"50\"\n+  - name: CONNECTION_DRAIN_TIMEOUT_MS\n+    value: \"5000\"",
+                command=alt_cmd,
+                patch_diff=alt_diff,
                 risk_level="LOW",
-                rollback_command=f"kubectl set env deployment/{target_svc} MAX_CONCURRENT_REQUESTS-",
-                estimated_recovery_time="15 seconds",
+                rollback_command=alt_rb,
+                estimated_recovery_time="10 seconds",
                 status="PENDING_APPROVAL"
             )
             incident.remediation_plan = alt_plan

@@ -16,10 +16,15 @@ class OracleAgent:
         await asyncio.sleep(1.4)
         
         sc = SCENARIOS.get(incident.scenario_id, {})
-        rca_text = sc.get("root_cause", "Anomaly induced cascade failure.")
+        rca_text = incident.root_cause_summary or sc.get("root_cause", "Anomaly induced cascade failure.")
         incident.root_cause_summary = rca_text
         
-        confidence = 0.825 if incident.clock_skew_detected else 0.964
+        if "unstructured" in incident.scenario_id or "drift" in incident.scenario_id:
+            confidence = 0.385
+        elif incident.clock_skew_detected:
+            confidence = 0.825
+        else:
+            confidence = 0.964
         
         uncertainty_note = ""
         if incident.uncertainty_analysis:

@@ -37,7 +37,11 @@ export default function NodeInspectorModal({ node, isOpen, onClose }) {
                   {node.type}
                 </span>
               </div>
-              <p className="text-xs font-mono text-slate-400">Kubernetes Pod Inspector • {node.id}</p>
+              <p className="text-xs font-mono text-slate-400">
+                {node.id.includes('kernel') || node.id.includes('cgroup') 
+                  ? 'Host OS & Kernel Inspector' 
+                  : (node.id.includes('nginx') ? 'Ingress Proxy Inspector' : (node.id.includes('db') || node.id.includes('pg') || node.id.includes('redis') ? 'Database Engine Inspector' : 'System Pod / Service Inspector'))} • {node.id}
+              </p>
             </div>
           </div>
 

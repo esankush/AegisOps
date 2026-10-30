@@ -130,9 +130,14 @@ async def trigger_custom_incident(req: CustomLogIncidentRequest):
     logs = (req.raw_logs or "").strip()
     if not logs:
         logs = "2026-10-31T03:30:00Z [custom-service] [ERROR] Unhandled connection timeout in worker thread pool"
+    
+    # Auto-detect service & title if default placeholders or empty
+    service_param = None if req.service in [None, "", "custom-service", "payment-processor", "target-service", "billing-worker"] else req.service
+    title_param = None if req.title in [None, "", "Custom Production Log Outage", "Critical NullPointer in BillingService"] else req.title
+    
     incident = await crew_manager.trigger_custom_incident(
-        service=req.service or "custom-service",
-        title=req.title or "Custom Production Log Outage",
+        service=service_param or "",
+        title=title_param or "",
         raw_logs=logs
     )
     return incident

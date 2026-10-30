@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Radio, Flame, Sparkles, FileText, CheckCircle2, FileCode } from 'lucide-react';
+import { Shield, Radio, Flame, Sparkles, FileText, CheckCircle2, FileCode, Zap, Cpu } from 'lucide-react';
 
 export default function Header({ 
   scenarios, 
@@ -39,10 +39,12 @@ export default function Header({
         </div>
 
         {/* Center / Scenario Selector & Chaos Trigger & Custom Logs Button */}
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-3 flex-wrap gap-y-2">
+          
+          {/* Preset Scenario Select */}
           <div className="flex items-center space-x-2 bg-space-900/80 border border-slate-700/60 rounded-xl px-3 py-1.5 text-xs text-slate-300">
             <Flame className="w-4 h-4 text-amber-400" />
-            <span className="text-slate-400 font-medium">Chaos Scenario:</span>
+            <span className="text-slate-400 font-medium">Scenario:</span>
             <select
               value={currentScenario}
               onChange={(e) => onSelectScenario(e.target.value)}
@@ -65,12 +67,13 @@ export default function Header({
             <span>{loading ? "Synthesizing..." : "Inject Outage"}</span>
           </button>
 
+          {/* Primary Action: Paste Logs with Auto-Detection */}
           <button
             onClick={onOpenCustomLogModal}
-            className="flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-semibold uppercase tracking-wider text-cyan-300 bg-space-900/90 border border-cyan-500/40 hover:bg-cyan-500/20 active:scale-95 transition-all shadow-[0_0_12px_rgba(0,240,255,0.2)]"
+            className="flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-cyan-200 bg-gradient-to-r from-cyan-950 via-space-900 to-purple-950 border border-cyan-400/60 hover:border-cyan-300 hover:shadow-[0_0_20px_rgba(0,240,255,0.4)] active:scale-95 transition-all shadow-[0_0_12px_rgba(0,240,255,0.2)]"
           >
-            <FileCode className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Paste Error Logs</span>
+            <Zap className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+            <span>Paste Error / Crash Logs</span>
           </button>
         </div>
 
@@ -88,8 +91,9 @@ export default function Header({
 
           <div className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-space-900/60 border border-slate-700/50">
             <Radio className={`w-3.5 h-3.5 ${wsConnected ? 'text-emerald-400 animate-pulse' : 'text-rose-400'}`} />
-            <span className="text-slate-300">
-              {wsConnected ? 'Telemetry Live' : 'Connecting...'}
+            <span className="text-slate-400">War Room:</span>
+            <span className={wsConnected ? 'text-emerald-400 font-semibold' : 'text-rose-400 font-semibold'}>
+              {wsConnected ? 'LIVE' : 'CONNECTING'}
             </span>
           </div>
         </div>
@@ -98,4 +102,3 @@ export default function Header({
     </header>
   );
 }
-

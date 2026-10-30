@@ -313,90 +313,21 @@ def create_incident_from_scenario(scenario_id: str) -> Incident:
     return incident
 
 def create_incident_from_custom_logs(service: str, title: str, raw_logs: str) -> Incident:
-    now = datetime.utcnow().isoformat() + "Z"
-    clean_service = service.strip() or "target-service"
-    log_lines = [line.strip() for line in raw_logs.strip().split("\n") if line.strip()]
+    from app.engine.crash_analyzer import CrashAnalyzer
+    incident = CrashAnalyzer.analyze_logs(raw_logs, service, title)
     
-    error_lines = [l for l in log_lines if any(k in l.lower() for k in ["error", "fatal", "exception", "failed", "timeout", "oom", "panic", "refused", "nullpointer"])]
-    sample_error = error_lines[0] if error_lines else (log_lines[0] if log_lines else "Unknown application exception")
-    
-    has_skew = any("drift" in l.lower() or "skew" in l.lower() for l in log_lines)
-    skew_msg = f"Clock drift flagged on {clean_service} nodes. Causal tracing activated." if has_skew else None
-    
-    severity = "P1 - CRITICAL" if len(error_lines) > 2 or any(k in raw_logs.lower() for k in ["fatal", "oom", "panic", "deadlock"]) else "P2 - MAJOR"
-    root_cause_guess = f"Adaptive analysis on {clean_service} detected critical failure signature: '{sample_error[:120]}'. Trace causality prioritized over raw timestamps."
-    
-    alerts = [
-        Alert(
-            id=f"alt-custom-01",
-            timestamp=now,
-            source="Adaptive Log Ingestion",
-            service=clean_service,
-            severity="CRITICAL" if severity == "P1 - CRITICAL" else "HIGH",
-            message=sample_error[:200],
-            metrics={"log_lines_analyzed": len(log_lines), "error_count": len(error_lines)}
-        )
-    ]
-    
-    nodes = [
-        CausalNode(id="api-gateway", name="API Gateway", type="gateway", status="degraded", latency="420ms", error_rate="18.5%"),
-        CausalNode(id=clean_service, name=f"{clean_service.title()} (User Target)", type="service", status="failing", latency="12400ms", error_rate="74.2%"),
-        CausalNode(id="backend-db", name="Primary DB / Storage", type="database", status="healthy", latency="4ms", error_rate="0.0%")
-    ]
-    edges = [
-        CausalEdge(source="api-gateway", target=clean_service, label="Causal Span tr-custom", failing=True),
-        CausalEdge(source=clean_service, target="backend-db", label="Storage Queries", failing=False)
-    ]
-    
-    top = TopologyGraph(nodes=nodes, edges=edges)
-    
-    rem = RemediationPlan(
-        id=f"rem-cust-{uuid.uuid4().hex[:4]}",
-        title=f"Emergency Hotfix Configuration & Rolling Restart for {clean_service}",
-        description=f"Isolate failing instances of {clean_service}, drain active connections, apply safe concurrency limits, and execute rolling container restart.",
-        target_service=clean_service,
-        command=f"kubectl rollout restart deployment/{clean_service} && kubectl scale deployment/{clean_service} --replicas=4",
-        patch_diff=f"--- a/deployments/{clean_service}.yaml\n+++ b/deployments/{clean_service}.yaml\n@@ -10,3 +10,4 @@\n   spec:\n-    replicas: 1\n+    replicas: 4\n+    terminationGracePeriodSeconds: 30",
-        risk_level="LOW",
-        rollback_command=f"kubectl rollout undo deployment/{clean_service}",
-        estimated_recovery_time="35 seconds",
-        status="PENDING_APPROVAL"
-    )
-    
-    SCENARIOS[f"custom_{clean_service}"] = {
-        "id": f"custom_{clean_service}",
-        "title": title or f"Custom Log Incident in {clean_service}",
-        "severity": severity,
-        "service": clean_service,
-        "blast_radius": f"{clean_service}, upstream gateway (User-pasted error logs)",
-        "logs": log_lines,
-        "root_cause": root_cause_guess,
-        "clock_skew": skew_msg,
-        "uncertainty_analysis": f"Confidence: 85% (15% calibrated uncertainty due to user log ingestion dialect variance).",
-        "where_to_look_next": [
-            f"Check container log stderr on {clean_service} pods.",
-            "Verify distributed trace context headers (traceparent/b3) across downstream RPCs."
-        ]
+    # Register scenario so agents can dynamically query logs & context
+    SCENARIOS[incident.scenario_id] = {
+        "id": incident.scenario_id,
+        "title": incident.title,
+        "severity": incident.severity,
+        "service": incident.remediation_plan.target_service if incident.remediation_plan else "target-service",
+        "blast_radius": incident.blast_radius,
+        "logs": [l.strip() for l in raw_logs.strip().split("\n") if l.strip()],
+        "root_cause": incident.root_cause_summary,
+        "clock_skew": incident.clock_skew_detected,
+        "uncertainty_analysis": incident.uncertainty_analysis,
+        "where_to_look_next": incident.where_to_look_next or []
     }
     
-    return Incident(
-        id=f"INC-{uuid.uuid4().hex[:6].upper()}",
-        scenario_id=f"custom_{clean_service}",
-        title=title or f"Custom Log Incident: {clean_service}",
-        status="ACTIVE",
-        severity=severity,
-        created_at=now,
-        blast_radius=f"{clean_service}, upstream gateway (User-pasted error logs)",
-        root_cause_summary=root_cause_guess,
-        clock_skew_detected=skew_msg,
-        uncertainty_analysis=f"Confidence: 85% (Calibrated uncertainty based on custom log parsing).",
-        where_to_look_next=[
-            f"Inspect {clean_service} thread allocation.",
-            "Check upstream gateway retry timeout configuration."
-        ],
-        alerts=alerts,
-        agent_thoughts=[],
-        topology=top,
-        remediation_plan=rem,
-        post_mortem=None
-    )
+    return incident
