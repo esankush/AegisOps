@@ -366,6 +366,9 @@ def create_incident_from_custom_logs(service: str, title: str, raw_logs: str) ->
     SCENARIOS[f"custom_{clean_service}"] = {
         "id": f"custom_{clean_service}",
         "title": title or f"Custom Log Incident in {clean_service}",
+        "severity": severity,
+        "service": clean_service,
+        "blast_radius": f"{clean_service}, upstream gateway (User-pasted error logs)",
         "logs": log_lines,
         "root_cause": root_cause_guess,
         "clock_skew": skew_msg,

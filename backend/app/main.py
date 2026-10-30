@@ -72,12 +72,13 @@ async def list_scenarios():
     return [
         {
             "id": sc_id,
-            "title": data["title"],
-            "severity": data["severity"],
-            "blast_radius": data["blast_radius"],
-            "service": data["service"]
+            "title": data.get("title", sc_id),
+            "severity": data.get("severity", "P1 - CRITICAL"),
+            "blast_radius": data.get("blast_radius", "Microservice cluster"),
+            "service": data.get("service", "target-service")
         }
         for sc_id, data in SCENARIOS.items()
+        if not sc_id.startswith("custom_")
     ]
 
 @app.post("/api/incident/trigger")
