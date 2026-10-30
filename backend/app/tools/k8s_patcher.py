@@ -22,3 +22,4 @@ class K8sPatcher:
             "stdout": f"[Rollback Success] Executed: {rollback_command}\nState reverted to previous revision.",
             "returncode": 0
         }
+

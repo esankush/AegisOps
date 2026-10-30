@@ -138,3 +138,4 @@ export default function RemediationCockpit({ remediation, incidentStatus, onActi
     </div>
   );
 }
+

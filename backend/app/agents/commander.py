@@ -96,3 +96,4 @@ The incident was isolated to `{incident.blast_radius}`. Autonomous root-cause an
         )
         incident.agent_thoughts.append(thought)
         return thought
+

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Radio, Flame, Sparkles, FileText, CheckCircle2 } from 'lucide-react';
+import { Shield, Radio, Flame, Sparkles, FileText, CheckCircle2, FileCode } from 'lucide-react';
 
 export default function Header({ 
   scenarios, 
@@ -9,7 +9,8 @@ export default function Header({
   loading, 
   wsConnected, 
   incident,
-  onOpenPostMortem 
+  onOpenPostMortem,
+  onOpenCustomLogModal
 }) {
   return (
     <header className="sticky top-0 z-40 w-full glass-panel border-b border-cyan-500/20 px-6 py-3.5 backdrop-blur-xl">
@@ -37,7 +38,7 @@ export default function Header({
           </div>
         </div>
 
-        {/* Center / Scenario Selector & Chaos Trigger */}
+        {/* Center / Scenario Selector & Chaos Trigger & Custom Logs Button */}
         <div className="flex items-center space-x-3">
           <div className="flex items-center space-x-2 bg-space-900/80 border border-slate-700/60 rounded-xl px-3 py-1.5 text-xs text-slate-300">
             <Flame className="w-4 h-4 text-amber-400" />
@@ -58,10 +59,18 @@ export default function Header({
           <button
             onClick={() => onTriggerScenario(currentScenario)}
             disabled={loading}
-            className="flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold uppercase tracking-wider text-white bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 active:scale-95 transition-all shadow-[0_0_15px_rgba(244,63,94,0.35)] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-semibold uppercase tracking-wider text-white bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 active:scale-95 transition-all shadow-[0_0_15px_rgba(244,63,94,0.35)] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Flame className="w-3.5 h-3.5" />
             <span>{loading ? "Synthesizing..." : "Inject Outage"}</span>
+          </button>
+
+          <button
+            onClick={onOpenCustomLogModal}
+            className="flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-semibold uppercase tracking-wider text-cyan-300 bg-space-900/90 border border-cyan-500/40 hover:bg-cyan-500/20 active:scale-95 transition-all shadow-[0_0_12px_rgba(0,240,255,0.2)]"
+          >
+            <FileCode className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Paste Error Logs</span>
           </button>
         </div>
 
@@ -89,3 +98,4 @@ export default function Header({
     </header>
   );
 }
+

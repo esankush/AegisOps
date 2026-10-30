@@ -8,6 +8,7 @@ import CausalGraph from './components/CausalGraph';
 import RemediationCockpit from './components/RemediationCockpit';
 import TelemetryHUD from './components/TelemetryHUD';
 import PostMortemModal from './components/PostMortemModal';
+import CustomLogModal from './components/CustomLogModal';
 
 const API_BASE = 'http://localhost:8000/api';
 const WS_URL = 'ws://localhost:8000/ws/warroom';
@@ -24,6 +25,7 @@ export default function App() {
   const [actionLoading, setActionLoading] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const [isPostMortemOpen, setIsPostMortemOpen] = useState(false);
+  const [isCustomLogModalOpen, setIsCustomLogModalOpen] = useState(false);
 
   // Fetch initial scenarios and active incident
   useEffect(() => {
@@ -107,6 +109,25 @@ export default function App() {
     }
   };
 
+  // Submit User Custom Error Logs
+  const handleCustomLogSubmit = async ({ service, title, raw_logs }) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/incident/custom`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ service, title, raw_logs })
+      });
+      const data = await res.json();
+      setIncident(data);
+      setIsCustomLogModalOpen(false);
+    } catch (err) {
+      console.error('Failed to analyze custom logs', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Human Action (APPROVE / REJECT)
   const handleRemediationAction = async (action) => {
     setActionLoading(true);
@@ -143,6 +164,7 @@ export default function App() {
         wsConnected={wsConnected}
         incident={incident}
         onOpenPostMortem={() => setIsPostMortemOpen(true)}
+        onOpenCustomLogModal={() => setIsCustomLogModalOpen(true)}
       />
 
       {/* Main War Room Body */}
@@ -189,6 +211,14 @@ export default function App() {
         incidentId={incident?.id}
       />
 
+      {/* Custom Error Log Ingestion Modal */}
+      <CustomLogModal
+        isOpen={isCustomLogModalOpen}
+        onClose={() => setIsCustomLogModalOpen(false)}
+        onSubmit={handleCustomLogSubmit}
+        isSubmitting={loading}
+      />
+
       {/* Cyber Footer */}
       <footer className="relative z-10 glass-panel border-t border-slate-800 py-4 px-6 text-center text-xs font-mono text-slate-500">
         <p>AegisOps • Autonomous Multi-Agent Incident Response & Triage Crew • Built for Afterhours 1.0 Hackathon</p>
@@ -196,3 +226,4 @@ export default function App() {
     </div>
   );
 }
+

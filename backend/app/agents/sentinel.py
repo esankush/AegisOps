@@ -34,3 +34,4 @@ class SentinelAgent:
         )
         incident.agent_thoughts.append(thought)
         return thought
+

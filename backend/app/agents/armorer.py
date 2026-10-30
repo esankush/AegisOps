@@ -40,3 +40,4 @@ class ArmorerAgent:
         incident.agent_thoughts.append(thought)
         incident.status = "AWAITING_APPROVAL"
         return thought
+

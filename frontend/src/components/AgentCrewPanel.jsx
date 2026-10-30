@@ -112,3 +112,4 @@ export default function AgentCrewPanel({ thoughts, incidentStatus }) {
     </div>
   );
 }
+

@@ -202,3 +202,4 @@ KEY DIFFERENCES
 - **Human-in-the-Loop Safety:** Autonomous triage and root-cause analysis, but gated execution with unified diff inspections and rollback mechanisms.
 - **Interstellar Cosmic UX:** Cinematic dark-mode SRE command center with canvas starfields, shooting stars, and glassmorphic telemetry cards.
 - **Deterministic Live Demo:** 3 pre-configured incident simulations for zero-latency, error-free judging demonstrations.
+

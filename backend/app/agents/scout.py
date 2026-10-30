@@ -42,3 +42,4 @@ class ScoutAgent:
         )
         incident.agent_thoughts.append(thought)
         return thought
+

@@ -34,3 +34,4 @@ class MetricsCollector:
             "p99_latency_ms": 42,
             "error_rate_pct": 0.05
         })
+

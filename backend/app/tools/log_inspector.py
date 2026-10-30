@@ -20,3 +20,4 @@ class LogInspector:
             "critical_signatures": errors[:3],
             "suspected_class": "CheckoutHandler.java" if any("CheckoutHandler" in l for l in logs) else "PaymentsIdempotencyService"
         }
+

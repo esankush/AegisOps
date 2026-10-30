@@ -198,6 +198,81 @@ SCENARIOS: Dict[str, Dict[str, Any]] = {
 def get_scenario(scenario_id: str) -> Dict[str, Any]:
     return SCENARIOS.get(scenario_id, SCENARIOS["db_pool_exhaustion"])
 
+def create_incident_from_custom_logs(service: str, title: str, raw_logs: str) -> Incident:
+    now = datetime.utcnow().isoformat() + "Z"
+    clean_service = service.strip() or "target-service"
+    log_lines = [line.strip() for line in raw_logs.strip().split("\n") if line.strip()]
+    
+    # Detect critical errors
+    error_lines = [l for l in log_lines if any(k in l.lower() for k in ["error", "fatal", "exception", "failed", "timeout", "oom", "panic", "refused", "nullpointer"])]
+    sample_error = error_lines[0] if error_lines else (log_lines[0] if log_lines else "Unknown application exception")
+    
+    severity = "P1 - CRITICAL" if len(error_lines) > 2 or any(k in raw_logs.lower() for k in ["fatal", "oom", "panic", "deadlock"]) else "P2 - MAJOR"
+    
+    # Synthesize root cause from logs
+    root_cause_guess = f"Stack analysis on {clean_service} detected critical failure signature: '{sample_error[:120]}'. High error density in ingested telemetry indicates service degradation."
+    
+    alerts = [
+        Alert(
+            id=f"alt-custom-01",
+            timestamp=now,
+            source="Custom Log Ingestion",
+            service=clean_service,
+            severity="CRITICAL" if severity == "P1 - CRITICAL" else "HIGH",
+            message=sample_error[:200],
+            metrics={"log_lines_analyzed": len(log_lines), "error_count": len(error_lines)}
+        )
+    ]
+    
+    nodes = [
+        CausalNode(id="api-gateway", name="API Gateway", type="gateway", status="degraded", latency="420ms", error_rate="18.5%"),
+        CausalNode(id=clean_service, name=f"{clean_service.title()} (User Target)", type="service", status="failing", latency="12400ms", error_rate="74.2%"),
+        CausalNode(id="backend-db", name="Primary DB / Storage", type="database", status="healthy", latency="4ms", error_rate="0.0%")
+    ]
+    edges = [
+        CausalEdge(source="api-gateway", target=clean_service, label="Upstream Route", failing=True),
+        CausalEdge(source=clean_service, target="backend-db", label="Storage Queries", failing=False)
+    ]
+    
+    top = TopologyGraph(nodes=nodes, edges=edges)
+    
+    rem = RemediationPlan(
+        id=f"rem-cust-{uuid.uuid4().hex[:4]}",
+        title=f"Emergency Restart & Hotfix Configuration for {clean_service}",
+        description=f"Isolate failing instances of {clean_service}, drain active connections, apply safe concurrency limits, and execute rolling container restart.",
+        target_service=clean_service,
+        command=f"kubectl rollout restart deployment/{clean_service} && kubectl scale deployment/{clean_service} --replicas=4",
+        patch_diff=f"--- a/deployments/{clean_service}.yaml\n+++ b/deployments/{clean_service}.yaml\n@@ -10,3 +10,4 @@\n   spec:\n-    replicas: 1\n+    replicas: 4\n+    terminationGracePeriodSeconds: 30",
+        risk_level="LOW",
+        rollback_command=f"kubectl rollout undo deployment/{clean_service}",
+        estimated_recovery_time="35 seconds",
+        status="PENDING_APPROVAL"
+    )
+    
+    # Store custom logs in a temporary scenario entry so Scout can inspect them
+    SCENARIOS[f"custom_{clean_service}"] = {
+        "id": f"custom_{clean_service}",
+        "title": title or f"Custom Log Incident in {clean_service}",
+        "logs": log_lines,
+        "root_cause": root_cause_guess
+    }
+    
+    return Incident(
+        id=f"INC-{uuid.uuid4().hex[:6].upper()}",
+        scenario_id=f"custom_{clean_service}",
+        title=title or f"Custom Log Incident: {clean_service}",
+        status="ACTIVE",
+        severity=severity,
+        created_at=now,
+        blast_radius=f"{clean_service}, upstream gateway (User-pasted error logs)",
+        root_cause_summary=root_cause_guess,
+        alerts=alerts,
+        agent_thoughts=[],
+        topology=top,
+        remediation_plan=rem,
+        post_mortem=None
+    )
+
 def create_incident_from_scenario(scenario_id: str) -> Incident:
     sc = get_scenario(scenario_id)
     now = datetime.utcnow().isoformat() + "Z"
@@ -224,3 +299,4 @@ def create_incident_from_scenario(scenario_id: str) -> Incident:
         post_mortem=None
     )
     return incident
+

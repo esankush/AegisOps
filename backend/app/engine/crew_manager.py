@@ -2,7 +2,7 @@ import asyncio
 from typing import Dict, List, Optional
 from fastapi import WebSocket
 from app.models.schemas import Incident, AgentThought
-from app.engine.simulator import create_incident_from_scenario
+from app.engine.simulator import create_incident_from_scenario, create_incident_from_custom_logs
 from app.agents.sentinel import SentinelAgent
 from app.agents.scout import ScoutAgent
 from app.agents.oracle import OracleAgent
@@ -47,6 +47,18 @@ class CrewManager:
         })
         
         # Launch multi-agent pipeline in background
+        asyncio.create_task(self._run_agent_pipeline(incident))
+        return incident
+
+    async def trigger_custom_incident(self, service: str, title: str, raw_logs: str) -> Incident:
+        incident = create_incident_from_custom_logs(service, title, raw_logs)
+        self.current_incident = incident
+        
+        await self.broadcast({
+            "type": "INCIDENT_CREATED",
+            "incident": incident.model_dump()
+        })
+        
         asyncio.create_task(self._run_agent_pipeline(incident))
         return incident
 
@@ -111,3 +123,4 @@ class CrewManager:
         return self.current_incident
 
 crew_manager = CrewManager()
+

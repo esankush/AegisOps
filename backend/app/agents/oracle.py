@@ -36,3 +36,4 @@ class OracleAgent:
         )
         incident.agent_thoughts.append(thought)
         return thought
+

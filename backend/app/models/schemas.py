@@ -70,6 +70,12 @@ class Incident(BaseModel):
 class ScenarioTriggerRequest(BaseModel):
     scenario_id: str
 
+class CustomLogIncidentRequest(BaseModel):
+    service: str = "custom-service"
+    title: Optional[str] = "Custom Production Log Outage"
+    raw_logs: str
+
 class RemediationActionRequest(BaseModel):
     action: str # "APPROVE", "REJECT", "CUSTOM_COMMAND"
     custom_command: Optional[str] = None
+
