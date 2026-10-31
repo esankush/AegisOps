@@ -107,8 +107,9 @@ export default function AIChatCopilot({ incident }) {
               <div>
                 <div className="flex items-center space-x-2">
                   <h3 className="text-sm font-bold text-slate-100">Aegis AI Copilot</h3>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                    Live Context
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 font-semibold flex items-center space-x-1">
+                    <Sparkles className="w-2.5 h-2.5 text-purple-400" />
+                    <span>Groq LPU™ Online</span>
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-400">
@@ -152,7 +153,14 @@ export default function AIChatCopilot({ incident }) {
                     }`}
                   >
                     <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
-                      <span className="font-semibold text-cyan-300">{m.sender}</span>
+                      <div className="flex items-center space-x-1.5">
+                        <span className="font-semibold text-cyan-300">{m.sender}</span>
+                        {m.model && (
+                          <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[9px] font-mono">
+                            {m.model}
+                          </span>
+                        )}
+                      </div>
                       <span className="font-mono text-slate-500">{m.timestamp}</span>
                     </div>
                     <div className="leading-relaxed whitespace-pre-wrap font-sans text-xs">
@@ -215,3 +223,4 @@ export default function AIChatCopilot({ incident }) {
     </>
   );
 }
+

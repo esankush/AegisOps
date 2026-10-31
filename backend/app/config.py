@@ -2,6 +2,10 @@ import os
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+root_dir = os.path.dirname(backend_dir)
+load_dotenv(os.path.join(backend_dir, ".env"))
+load_dotenv(os.path.join(root_dir, ".env"))
 load_dotenv()
 
 class Settings(BaseModel):
@@ -10,9 +14,8 @@ class Settings(BaseModel):
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-    SIMULATED_AI_MODE: bool = os.getenv("SIMULATED_AI_MODE", "true").lower() == "true"
+    SIMULATED_AI_MODE: bool = os.getenv("SIMULATED_AI_MODE", "false").lower() == "true"
     HOST: str = "0.0.0.0"
     PORT: int = 8000
 
 settings = Settings()
-
