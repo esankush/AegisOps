@@ -1,5 +1,8 @@
-import React, { useState, useMemo } from 'react';
-import { X, FileCode, Play, Sparkles, AlertCircle, Cpu, Server, Database, ShieldAlert, Terminal, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { 
+  X, FileCode, Play, Sparkles, Cpu, Server, Database, 
+  ShieldAlert, Terminal, RotateCcw, Layers, HardDrive, Wifi, CheckCircle2 
+} from 'lucide-react';
 
 const REAL_WORLD_PRESETS = [
   {
@@ -40,133 +43,320 @@ systemd[1]: mysqld.service: Consumed 4min 12.891s CPU time.`
 2026-10-31T03:32:15.892Z k8s-events: Back-off restarting failed container payment-worker in pod payment-worker-78fb9c-xz21_default`
   },
   {
-    label: "⚡ Unstructured Drift (\"type shit\")",
-    badge: "polymorphic",
-    service: "telemetry-pipeline",
-    title: "Unrecognized Polymorphic Telemetry Stream",
+    label: "📭 Kafka Partition Offline",
+    badge: "kafka-broker",
+    service: "kafka-broker-3",
+    title: "Kafka Broker Partition 12 Desynchronized & Offline",
+    logs: `2026-10-31 03:35:10.120 [kafka-broker-3] ERROR [KafkaServer id=3] Fatal error during KafkaServer startup. Prepare to shutdown (kafka.server.KafkaServer)
+org.apache.kafka.common.errors.LeaderNotAvailableException: There is no leader for partition checkout-events-12
+[kafka-coordinator] WARN [GroupCoordinator 3]: Failed to write empty metadata for group cart-analytics-group: NOT_COORDINATOR`
+  },
+  {
+    label: "🐍 Python Async Traceback",
+    badge: "python",
+    service: "cart-service",
+    title: "Python AsyncIO Deadlock in Cart Service",
+    logs: `2026-10-31 03:40:02.109 [cart-service] ERROR: Traceback (most recent call last):
+  File "/app/services/cart/checkout.py", line 142, in process_cart_lock
+    await redis_pool.acquire_lock(user_id, timeout=2.0)
+  File "/usr/local/lib/python3.12/asyncio/tasks.py", line 498, in wait_for
+    raise exceptions.TimeoutError("Redis mutex lock acquisition timed out after 2000ms")
+TimeoutError: Redis mutex lock acquisition timed out after 2000ms`
+  },
+  {
+    label: "⚡ Custom / Unstructured Drift",
+    badge: "drift",
+    service: "runtime-worker",
+    title: "Corrupted Buffer Frame & Peer Disconnect",
     logs: `CRITICAL_PANIC_CORE_DUMP_0x89AA12: corrupted frame in buffer slot 92
 unhandled drift state: sequence interrupted by peer disconnect
 unknown payload format: [RAW_STREAM_NON_RFC] bytes=0x4141414141414141`
   }
 ];
 
+// Dynamic Target Extractor
+function extractDynamicTarget(text) {
+  if (!text || !text.trim()) return "workload-service";
+
+  // 1. Bracketed identifier [service-name]
+  const bracketMatches = text.match(/\[([a-zA-Z0-9_\-\.]{3,35})\]/g);
+  const ignoredBrackets = new Set([
+    "INFO", "ERROR", "WARN", "WARNING", "FATAL", "DEBUG", "TRACE", "CRITICAL",
+    "POSTGRES", "UTC", "STDERR", "STDOUT", "SYSLOG", "KUBELET", "SYSTEMD",
+    "KERNEL", "AUDIT", "FAIL", "PANIC", "EMERG"
+  ]);
+  if (bracketMatches) {
+    for (const b of bracketMatches) {
+      const clean = b.slice(1, -1);
+      if (!ignoredBrackets.has(clean.toUpperCase()) && !clean.startsWith("TS_") && isNaN(clean)) {
+        return clean.toLowerCase();
+      }
+    }
+  }
+
+  // 2. Systemd service unit (e.g. mysqld.service, rabbitmq.service)
+  const systemdMatch = text.match(/([a-zA-Z0-9_\-\.]+)\.service/i);
+  if (systemdMatch) return systemdMatch[1].toLowerCase();
+
+  // 3. Linux Kernel killed process
+  const killedMatch = text.match(/kill(?:ed)?\s+process\s+\d+\s+\(([\w\.\-]+)\)/i);
+  if (killedMatch) return killedMatch[1].toLowerCase();
+
+  // 4. Kubernetes pod or container
+  const k8sMatch = text.match(/(?:pod[\s\/]+|container[\s:=]+)([\w\.\-]+)/i);
+  if (k8sMatch) return k8sMatch[1].toLowerCase();
+
+  // 5. Upstream proxy target or URL
+  const upstreamMatch = text.match(/(?:upstream|connecting to|host)[:\s]+["']?(?:https?:\/\/)?([a-zA-Z0-9_\-\.]+)(?::\d+)?/i);
+  if (upstreamMatch) {
+    const cand = upstreamMatch[1].toLowerCase();
+    if (cand !== "127.0.0.1" && cand !== "localhost" && cand !== "0.0.0.0") {
+      return cand;
+    }
+  }
+
+  // 6. Hyphenated microservice slug (e.g. auth-service, order-processor, billing-api)
+  const slugMatch = text.match(/\b([a-z0-9]+-(?:service|worker|api|gateway|server|app|db|processor|daemon|engine|broker|cluster|node))\b/i);
+  if (slugMatch) return slugMatch[1].toLowerCase();
+
+  // 7. Common infrastructure keywords
+  const lower = text.toLowerCase();
+  const keywordMap = [
+    ["kafka", "kafka-broker"],
+    ["zookeeper", "zookeeper-cluster"],
+    ["elasticsearch", "elasticsearch-cluster"],
+    ["opensearch", "opensearch-cluster"],
+    ["rabbitmq", "rabbitmq-server"],
+    ["redis", "redis-cluster"],
+    ["postgres", "postgresql-primary"],
+    ["psql", "postgresql-primary"],
+    ["mysql", "mysqld"],
+    ["mariadb", "mariadb-server"],
+    ["nginx", "nginx-ingress"],
+    ["envoy", "envoy-gateway"],
+    ["traefik", "traefik-proxy"],
+    ["vault", "vault-secrets"],
+    ["consul", "consul-cluster"],
+    ["cart", "cart-service"],
+    ["checkout", "checkout-service"],
+    ["billing", "billing-worker"],
+    ["payment", "payment-processor"],
+    ["auth", "auth-service"],
+    ["order", "order-service"],
+    ["search", "search-api"],
+    ["notification", "notification-worker"]
+  ];
+  for (const [kw, svc] of keywordMap) {
+    if (lower.includes(kw)) return svc;
+  }
+
+  // 8. Extract first 2 distinct alphanumeric words
+  const words = text.match(/[a-zA-Z0-9]{3,15}/g);
+  if (words && words.length >= 2) {
+    const s = `${words[0].toLowerCase()}-${words[1].toLowerCase()}`;
+    if (!["out-of", "failed-to", "error-in", "unable-to"].includes(s)) {
+      return s;
+    }
+  }
+
+  return "workload-service";
+}
+
 export default function CustomLogModal({ isOpen, onClose, onSubmit, isSubmitting }) {
   const [logs, setLogs] = useState('');
-  const [manualOverride, setManualOverride] = useState(false);
-  const [overrideService, setOverrideService] = useState('');
-  const [overrideTitle, setOverrideTitle] = useState('');
+  const [title, setTitle] = useState('');
+  const [service, setService] = useState('');
+  
+  // Track if user explicitly edited the inputs manually
+  const [userEditedTitle, setUserEditedTitle] = useState(false);
+  const [userEditedService, setUserEditedService] = useState(false);
 
-  // Live Auto-Detection Engine
+  // Dynamic Real-time Detection Engine
   const detection = useMemo(() => {
     if (!logs.trim()) return null;
     const lower = logs.toLowerCase();
+    const dynamicTarget = extractDynamicTarget(logs);
 
     // 1. Linux Kernel OOM
     if (lower.includes('oom-killer') || lower.includes('out of memory') || lower.includes('kernel: [') || lower.includes('killed process')) {
-      const match = logs.match(/kill(?:ed)?\s+process\s+\d+\s+\(([\w\.\-]+)\)/i);
-      const proc = match ? match[1] : 'mysqld';
       return {
-        target: `${proc} (Linux Host Kernel)`,
-        service: proc,
+        target: dynamicTarget,
         category: "Linux OS Kernel Memory Starvation",
         severity: "P1 - CRITICAL",
         icon: Cpu,
         color: "text-rose-400 bg-rose-500/10 border-rose-500/30",
-        inferredTitle: `Linux Kernel OOM Killer: Terminated '${proc}' (Signal 9)`
+        inferredTitle: `Linux Kernel OOM Killer: Terminated '${dynamicTarget}' (Signal 9)`
       };
     }
 
-    // 2. Nginx 502
+    // 2. Nginx / Ingress 502 Refused
     if (lower.includes('nginx') || lower.includes('502 bad gateway') || lower.includes('connection refused') || lower.includes('upstream')) {
       return {
-        target: "nginx-ingress (Reverse Proxy)",
-        service: "nginx-ingress",
-        category: "Ingress Gateway Outage (TCP 111 Refused)",
+        target: dynamicTarget === "workload-service" ? "nginx-ingress" : dynamicTarget,
+        category: "Ingress Reverse Proxy Socket Rejection (502 Refused)",
         severity: "P1 - CRITICAL",
         icon: Server,
         color: "text-amber-400 bg-amber-500/10 border-amber-500/30",
-        inferredTitle: "Nginx Ingress 502 Bad Gateway: Upstream Socket Refused"
+        inferredTitle: `Nginx Ingress 502 Bad Gateway: Upstream Socket Refused on '${dynamicTarget}'`
       };
     }
 
-    // 3. PostgreSQL / DB
+    // 3. PostgreSQL / Relational DB
     if (lower.includes('postgres') || lower.includes('psql') || lower.includes('connection slots') || lower.includes('deadlock') || lower.includes('max_connections')) {
       return {
-        target: "postgresql-primary (Port 5432)",
-        service: "postgresql-primary",
-        category: "Database Connection Pool Collapse",
+        target: dynamicTarget === "workload-service" ? "postgresql-primary" : dynamicTarget,
+        category: "Database Connection Pool Collapse & Deadlock",
         severity: "P1 - CRITICAL",
         icon: Database,
         color: "text-cyan-400 bg-cyan-500/10 border-cyan-500/30",
-        inferredTitle: "PostgreSQL Pool Saturation: Remaining Connection Slots Reserved"
+        inferredTitle: `PostgreSQL Pool Saturation: Remaining Connection Slots Reserved on '${dynamicTarget}'`
       };
     }
 
-    // 4. Redis OOM
+    // 4. Redis Memory / Cache
     if (lower.includes('redis') || lower.includes('maxmemory') || lower.includes('noeviction')) {
       return {
-        target: "redis-cluster (Port 6379)",
-        service: "redis-cluster",
-        category: "Redis Cache Key Eviction Failure",
+        target: dynamicTarget === "workload-service" ? "redis-cluster" : dynamicTarget,
+        category: "In-Memory Cache Key Eviction & OOM Failure",
         severity: "P2 - MAJOR",
         icon: Database,
         color: "text-purple-400 bg-purple-500/10 border-purple-500/30",
-        inferredTitle: "Redis OOM: Command Not Allowed (MaxMemory Exceeded)"
+        inferredTitle: `Redis OOM: Command Not Allowed on '${dynamicTarget}' (MaxMemory Exceeded)`
       };
     }
 
-    // 5. Kubernetes CrashLoop
+    // 5. Kubernetes CrashLoopBackOff
     if (lower.includes('crashloopbackoff') || lower.includes('exit code 137') || lower.includes('oomkilled') || lower.includes('kubelet')) {
-      const podMatch = logs.match(/pod[\s\/]+([\w\.\-]+)/i) || logs.match(/container\s+([\w\.\-]+)/i);
-      const pod = podMatch ? podMatch[1] : 'worker-pod';
       return {
-        target: `Pod: ${pod} (Kubernetes)`,
-        service: pod,
-        category: "Kubernetes Container Termination (Exit 137)",
+        target: dynamicTarget,
+        category: "Kubernetes Pod CrashLoopBackOff & Eviction",
+        severity: "P1 - CRITICAL",
+        icon: Layers,
+        color: "text-rose-400 bg-rose-500/10 border-rose-500/30",
+        inferredTitle: `Kubernetes Pod CrashLoopBackOff: '${dynamicTarget}' Terminated (Exit 137)`
+      };
+    }
+
+    // 6. Kafka Message Broker
+    if (lower.includes('kafka') || lower.includes('leadernotavailable') || lower.includes('offsetcommit') || lower.includes('consumer group')) {
+      return {
+        target: dynamicTarget,
+        category: "Message Broker Partition Desynchronization & Consumer Lag",
         severity: "P1 - CRITICAL",
         icon: Server,
-        color: "text-rose-400 bg-rose-500/10 border-rose-500/30",
-        inferredTitle: `Kubernetes Pod CrashLoopBackOff: '${pod}' Terminated (Exit 137)`
+        color: "text-amber-300 bg-amber-500/10 border-amber-500/30",
+        inferredTitle: `Kafka Broker Partition Offline: LeaderNotAvailable on '${dynamicTarget}'`
       };
     }
 
-    // 6. Generic / Unstructured Drift / Slang / "type shit"
+    // 7. Elasticsearch / Search Cluster
+    if (lower.includes('elasticsearch') || lower.includes('opensearch') || lower.includes('cluster_block_exception') || lower.includes('unassigned shards')) {
+      return {
+        target: dynamicTarget,
+        category: "Search Index Shard Allocation & Circuit Breaker Collapse",
+        severity: "P1 - CRITICAL",
+        icon: Database,
+        color: "text-yellow-400 bg-yellow-500/10 border-yellow-500/30",
+        inferredTitle: `Elasticsearch Cluster Red: Unassigned Shards on '${dynamicTarget}'`
+      };
+    }
+
+    // 8. Disk Space Exhaustion
+    if (lower.includes('no space left') || lower.includes('disk full') || lower.includes('read-only file system')) {
+      return {
+        target: dynamicTarget,
+        category: "Host Disk Space Exhaustion & Filesystem Lock",
+        severity: "P1 - CRITICAL",
+        icon: HardDrive,
+        color: "text-red-400 bg-red-500/10 border-red-500/30",
+        inferredTitle: `Disk Space Exhaustion: No Space Left on Device (${dynamicTarget})`
+      };
+    }
+
+    // 9. Network Socket / DNS
+    if (lower.includes('name resolution') || lower.includes('connection reset') || lower.includes('broken pipe') || lower.includes('econnreset')) {
+      return {
+        target: dynamicTarget,
+        category: "Network Transport Socket Timeout & DNS Resolution Failure",
+        severity: "P1 - CRITICAL",
+        icon: Wifi,
+        color: "text-sky-400 bg-sky-500/10 border-sky-500/30",
+        inferredTitle: `Network Socket Refusal & DNS Resolution Timeout on '${dynamicTarget}'`
+      };
+    }
+
+    // 10. Java Spring JVM
+    if (lower.includes('nullpointerexception') || lower.includes('outofmemoryerror: java heap') || lower.includes('at com.')) {
+      return {
+        target: dynamicTarget,
+        category: "Java Spring JVM Thread Starvation & Exception",
+        severity: "P1 - CRITICAL",
+        icon: Cpu,
+        color: "text-orange-400 bg-orange-500/10 border-orange-500/30",
+        inferredTitle: `Java Spring JVM Exception in '${dynamicTarget}'`
+      };
+    }
+
+    // 11. Python Runtime Traceback
+    if (lower.includes('traceback (most recent call last)') || lower.includes('timeouterror') || lower.includes('unhandled exception')) {
+      return {
+        target: dynamicTarget,
+        category: "Python Asynchronous Runtime Traceback & Process Crash",
+        severity: "P1 - CRITICAL",
+        icon: Terminal,
+        color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30",
+        inferredTitle: `Python Runtime Exception in '${dynamicTarget}'`
+      };
+    }
+
+    // 12. Dynamic Custom Service Problem
+    const firstLine = logs.trim().split('\n')[0].slice(0, 40);
     return {
-      target: "telemetry-pipeline (Auto-Inferred)",
-      service: "telemetry-pipeline",
-      category: "Polymorphic Unstructured Anomaly (High Uncertainty)",
-      severity: "P2 - MAJOR",
+      target: dynamicTarget,
+      category: `${dynamicTarget.toUpperCase()} Service Degradation & Anomaly`,
+      severity: "P1 - CRITICAL",
       icon: ShieldAlert,
-      color: "text-cyan-300 bg-cyan-500/10 border-cyan-500/30",
-      inferredTitle: `Polymorphic Drift: ${logs.trim().slice(0, 35)}...`
+      color: "text-cyan-400 bg-cyan-500/10 border-cyan-500/30",
+      inferredTitle: `Production Outage on '${dynamicTarget}': ${firstLine}...`
     };
   }, [logs]);
+
+  // Synchronize draft title and target with auto-detection if user hasn't explicitly typed them
+  useEffect(() => {
+    if (detection) {
+      if (!userEditedTitle) {
+        setTitle(detection.inferredTitle);
+      }
+      if (!userEditedService) {
+        setService(detection.target);
+      }
+    }
+  }, [detection, userEditedTitle, userEditedService]);
 
   if (!isOpen) return null;
 
   const handleApplyPreset = (preset) => {
     setLogs(preset.logs);
-    setOverrideService('');
-    setOverrideTitle('');
+    setTitle(preset.title);
+    setService(preset.service);
+    setUserEditedTitle(false);
+    setUserEditedService(false);
   };
 
   const handleClear = () => {
     setLogs('');
-    setOverrideService('');
-    setOverrideTitle('');
+    setTitle('');
+    setService('');
+    setUserEditedTitle(false);
+    setUserEditedService(false);
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!logs.trim()) return;
 
-    const finalService = manualOverride && overrideService.trim() 
-      ? overrideService.trim() 
-      : (detection ? detection.service : "auto-detected-service");
-
-    const finalTitle = manualOverride && overrideTitle.trim() 
-      ? overrideTitle.trim() 
-      : (detection ? detection.inferredTitle : "Production Incident Outage");
+    const finalTitle = title.trim() || (detection ? detection.inferredTitle : "Production Incident Outage");
+    const finalService = service.trim() || (detection ? detection.target : "workload-service");
 
     onSubmit({
       service: finalService,
@@ -177,7 +367,7 @@ export default function CustomLogModal({ isOpen, onClose, onSubmit, isSubmitting
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-      <div className="glass-panel-glow w-full max-w-2xl rounded-2xl flex flex-col overflow-hidden border border-cyan-500/40 shadow-[0_0_40px_rgba(0,240,255,0.2)] max-h-[90vh]">
+      <div className="glass-panel-glow w-full max-w-2xl rounded-2xl flex flex-col overflow-hidden border border-cyan-500/40 shadow-[0_0_40px_rgba(0,240,255,0.2)] max-h-[92vh]">
         
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-700/60 bg-space-900/80 flex items-center justify-between">
@@ -187,13 +377,13 @@ export default function CustomLogModal({ isOpen, onClose, onSubmit, isSubmitting
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-100 flex items-center space-x-2">
-                <span>Paste Error Logs &amp; Crash Dumps</span>
+                <span>Paste Error Logs &amp; Incident Triage</span>
                 <span className="text-[10px] font-mono font-normal bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full border border-cyan-500/40">
-                  Zero Config Auto-Triage
+                  Adaptive Multi-Agent Triage
                 </span>
               </h3>
               <p className="text-xs text-slate-400">
-                Paste any logs or type text — AegisOps dynamically extracts the failing process, builds topology, and stages the fix.
+                Specify your incident title &amp; target microservice — AegisOps dynamically builds causal topology and surgical remediation.
               </p>
             </div>
           </div>
@@ -209,12 +399,88 @@ export default function CustomLogModal({ isOpen, onClose, onSubmit, isSubmitting
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4 bg-space-950/90 text-xs overflow-y-auto">
           
-          {/* 1. PRIMARY PASTE AREA - FRONT AND CENTER */}
+          {/* 1. TOP PROMINENT INPUT: INCIDENT TITLE (ASKED TO USER) */}
+          <div className="p-3.5 rounded-xl bg-space-900/70 border border-slate-700/80 space-y-1.5">
+            <label className="text-slate-200 font-mono font-bold text-xs flex items-center justify-between">
+              <span className="flex items-center space-x-1.5">
+                <span className="text-cyan-400 font-bold">1.</span>
+                <span>Incident Title * (What happened?)</span>
+              </span>
+              {userEditedTitle && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUserEditedTitle(false);
+                    if (detection) setTitle(detection.inferredTitle);
+                  }}
+                  className="text-[10px] text-cyan-400 hover:text-cyan-300 font-mono flex items-center space-x-1"
+                >
+                  <RotateCcw className="w-2.5 h-2.5" />
+                  <span>Reset to auto-detected</span>
+                </button>
+              )}
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                setUserEditedTitle(true);
+              }}
+              placeholder="e.g. Linux Kernel OOM Killer on mysqld, Payment Gateway 502 Refused, Kafka Broker Partition Loss"
+              required
+              className="w-full bg-space-950 border border-slate-700 focus:border-cyan-400 rounded-lg px-3 py-2 text-slate-100 font-medium text-xs focus:outline-none transition-colors"
+            />
+            <p className="text-[10px] text-slate-400 font-mono">
+              Provide a clear name for this war room incident, or let live auto-detection formulate it from your logs.
+            </p>
+          </div>
+
+          {/* 2. TOP PROMINENT INPUT: TARGET MICROSERVICE / COMPONENT */}
+          <div className="p-3.5 rounded-xl bg-space-900/70 border border-slate-700/80 space-y-1.5">
+            <label className="text-slate-200 font-mono font-bold text-xs flex items-center justify-between">
+              <span className="flex items-center space-x-1.5">
+                <span className="text-cyan-400 font-bold">2.</span>
+                <span>Target Microservice / Component * (Which system broke?)</span>
+              </span>
+              {userEditedService && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUserEditedService(false);
+                    if (detection) setService(detection.target);
+                  }}
+                  className="text-[10px] text-cyan-400 hover:text-cyan-300 font-mono flex items-center space-x-1"
+                >
+                  <RotateCcw className="w-2.5 h-2.5" />
+                  <span>Reset to auto-detected</span>
+                </button>
+              )}
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={service}
+                onChange={(e) => {
+                  setService(e.target.value);
+                  setUserEditedService(true);
+                }}
+                placeholder="e.g. mysqld, nginx-ingress, payment-worker, cart-service, kafka-broker-3"
+                required
+                className="w-full bg-space-950 border border-slate-700 focus:border-cyan-400 rounded-lg px-3 py-2 text-cyan-300 font-mono font-semibold text-xs focus:outline-none transition-colors"
+              />
+            </div>
+            <p className="text-[10px] text-slate-400 font-mono">
+              The isolated component receiving triage, causal topology isolation, and surgical remediation commands.
+            </p>
+          </div>
+
+          {/* 3. LOG INPUT TEXTAREA */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-slate-200 font-mono font-bold flex items-center space-x-1.5 text-xs">
                 <Terminal className="w-4 h-4 text-cyan-400" />
-                <span>Paste Any Server Crash Logs, dmesg, or Text:</span>
+                <span>3. Paste Server Crash Logs, dmesg, Stack Traces, or Text *</span>
               </label>
 
               {logs.length > 0 && (
@@ -224,30 +490,26 @@ export default function CustomLogModal({ isOpen, onClose, onSubmit, isSubmitting
                   className="text-[11px] font-mono text-rose-400 hover:text-rose-300 flex items-center space-x-1"
                 >
                   <RotateCcw className="w-3 h-3" />
-                  <span>Clear</span>
+                  <span>Clear All</span>
                 </button>
               )}
             </div>
 
             <textarea
-              rows={8}
+              rows={7}
               value={logs}
-              onChange={(e) => {
-                setLogs(e.target.value);
-                setOverrideService('');
-                setOverrideTitle('');
-              }}
-              placeholder="📋 Paste anything here! (e.g. Linux kernel panics, OOM killer traces, Nginx 502 errors, PostgreSQL locks, Python tracebacks, or raw unstructured text)..."
+              onChange={(e) => setLogs(e.target.value)}
+              placeholder="📋 Paste anything here! (e.g. Linux kernel panics, OOM killer traces, Nginx 502, Postgres connection locks, Kafka partition offline, Python/Node.js stack traces, or custom error text)..."
               required
               className="w-full bg-space-900/90 border border-slate-700 rounded-xl p-3.5 text-slate-100 font-mono text-xs focus:outline-none focus:border-cyan-400 leading-relaxed placeholder:text-slate-600 shadow-inner"
             />
           </div>
 
-          {/* 2. Sample Crash Shortcuts */}
+          {/* 4. Real-World Crash Shortcuts */}
           <div>
             <label className="block text-slate-400 font-mono mb-1.5 text-[11px] flex items-center space-x-1">
               <Sparkles className="w-3 h-3 text-cyan-400" />
-              <span>Or click to test with real-world crash logs:</span>
+              <span>Or click a real-world scenario to test instant triage:</span>
             </label>
             <div className="flex flex-wrap gap-1.5">
               {REAL_WORLD_PRESETS.map((p, i) => (
@@ -264,69 +526,31 @@ export default function CustomLogModal({ isOpen, onClose, onSubmit, isSubmitting
             </div>
           </div>
 
-          {/* 3. Live Real-Time Auto-Detection Card */}
+          {/* 5. Live Real-Time Auto-Detection Card */}
           {detection && (
             <div className={`p-3.5 rounded-xl border flex items-start space-x-3 transition-all ${detection.color}`}>
               <detection.icon className="w-5 h-5 shrink-0 mt-0.5" />
               <div className="space-y-1 flex-1">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold uppercase tracking-wider text-[11px]">
-                    ● Auto-Detected: {detection.target}
+                  <span className="font-bold uppercase tracking-wider text-[11px] flex items-center space-x-1.5">
+                    <span>● Target Isolated:</span>
+                    <span className="text-white bg-black/40 px-2 py-0.5 rounded font-mono border border-white/10">
+                      {service.trim() || detection.target}
+                    </span>
                   </span>
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-black/40 border border-white/10 font-semibold">
                     {detection.severity}
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-300 font-mono">
-                  Failure Class: <span className="text-white font-semibold">{detection.category}</span>
+                <p className="text-[11px] text-slate-200 font-mono">
+                  Failure Class: <span className="text-cyan-300 font-bold">{detection.category}</span>
                 </p>
                 <p className="text-[10px] text-slate-400">
-                  Target Service is automatically isolated to <code className="text-cyan-300 font-bold">{detection.service}</code>. No manual input required.
+                  Target Component isolated to <code className="text-cyan-300 font-bold">{service.trim() || detection.target}</code>. Topology nodes &amp; rollback commands will be generated specifically for this system.
                 </p>
               </div>
             </div>
           )}
-
-          {/* 4. Optional Manual Override */}
-          <div className="pt-1">
-            <button
-              type="button"
-              onClick={() => setManualOverride(!manualOverride)}
-              className="text-slate-400 hover:text-slate-200 font-mono text-[11px] flex items-center space-x-1"
-            >
-              <span>Optional: Override Target Microservice / Title</span>
-              {manualOverride ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            </button>
-
-            {manualOverride && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2 p-3 rounded-xl bg-space-900/60 border border-slate-800">
-                <div>
-                  <label className="block text-slate-400 font-mono text-[10px] mb-1">
-                    Custom Target Microservice:
-                  </label>
-                  <input
-                    type="text"
-                    value={overrideService}
-                    onChange={(e) => setOverrideService(e.target.value)}
-                    placeholder={detection ? detection.service : "e.g. checkout-service"}
-                    className="w-full bg-space-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 font-mono text-xs focus:outline-none focus:border-cyan-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-400 font-mono text-[10px] mb-1">
-                    Custom Incident Title:
-                  </label>
-                  <input
-                    type="text"
-                    value={overrideTitle}
-                    onChange={(e) => setOverrideTitle(e.target.value)}
-                    placeholder={detection ? detection.inferredTitle : "e.g. Database Connection Saturation"}
-                    className="w-full bg-space-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-cyan-400"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
 
           {/* Action Buttons */}
           <div className="pt-3 border-t border-slate-800 flex items-center justify-end space-x-3">
@@ -340,7 +564,7 @@ export default function CustomLogModal({ isOpen, onClose, onSubmit, isSubmitting
 
             <button
               type="submit"
-              disabled={isSubmitting || !logs.trim()}
+              disabled={isSubmitting || !logs.trim() || !title.trim() || !service.trim()}
               className="px-5 py-2.5 rounded-xl font-bold font-mono text-xs text-space-950 bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500 hover:opacity-90 active:scale-95 disabled:opacity-50 transition-all shadow-[0_0_20px_rgba(0,240,255,0.3)] flex items-center space-x-2"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
