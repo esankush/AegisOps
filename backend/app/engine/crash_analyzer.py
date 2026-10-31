@@ -96,14 +96,22 @@ class CrashAnalyzer:
             if kw in lower:
                 return svc
 
-        # 8. Clean slug from first 2 words
-        words = re.findall(r"[a-zA-Z0-9]{3,15}", text)
-        if len(words) >= 2:
-            slug = f"{words[0].lower()}-{words[1].lower()}"
-            if slug not in ["out-of", "failed-to", "error-in", "unable-to"]:
-                return slug
+        # 8. Try to find a meaningful noun (skip stop words)
+        stop_words = {
+            "the", "this", "that", "just", "went", "down", "and", "nothing", "works",
+            "bro", "idk", "what", "happened", "like", "its", "not", "but", "got",
+            "error", "fatal", "failed", "failure", "crash", "crashed", "whole",
+            "thing", "stuff", "something", "everything", "some", "with", "from",
+            "was", "were", "has", "have", "had", "been", "being", "for", "out",
+            "can", "cannot", "could", "all", "our", "your", "there", "here", "how",
+            "why", "when", "then", "very", "really", "don", "doesn", "didn", "won"
+        }
+        words = re.findall(r"[a-zA-Z]{3,20}", text.lower())
+        meaningful = [w for w in words if w not in stop_words]
+        if meaningful:
+            return f"{meaningful[0]}-service"
 
-        return "workload-service"
+        return "production-workload"
 
     @classmethod
     def analyze_logs(cls, raw_logs: str, user_service: Optional[str] = None, user_title: Optional[str] = None) -> Incident:

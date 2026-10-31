@@ -150,16 +150,23 @@ function extractDynamicTarget(text) {
     if (lower.includes(kw)) return svc;
   }
 
-  // 8. Extract first 2 distinct alphanumeric words
-  const words = text.match(/[a-zA-Z0-9]{3,15}/g);
-  if (words && words.length >= 2) {
-    const s = `${words[0].toLowerCase()}-${words[1].toLowerCase()}`;
-    if (!["out-of", "failed-to", "error-in", "unable-to"].includes(s)) {
-      return s;
-    }
+  // 8. Find a meaningful noun (skip stop words)
+  const stopWords = new Set([
+    "the", "this", "that", "just", "went", "down", "and", "nothing", "works",
+    "bro", "idk", "what", "happened", "like", "its", "not", "but", "got",
+    "error", "fatal", "failed", "failure", "crash", "crashed", "whole",
+    "thing", "stuff", "something", "everything", "some", "with", "from",
+    "was", "were", "has", "have", "had", "been", "being", "for", "out",
+    "can", "cannot", "could", "all", "our", "your", "there", "here", "how",
+    "why", "when", "then", "very", "really", "don", "doesn", "didn", "won"
+  ]);
+  const words = text.toLowerCase().match(/[a-z]{3,20}/g);
+  if (words) {
+    const meaningful = words.filter(w => !stopWords.has(w));
+    if (meaningful.length > 0) return `${meaningful[0]}-service`;
   }
 
-  return "workload-service";
+  return "production-workload";
 }
 
 export default function CustomLogModal({ isOpen, onClose, onSubmit, isSubmitting }) {
