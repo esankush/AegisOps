@@ -160,6 +160,7 @@ export default function App() {
   // Trigger Chaos Scenario
   const handleTriggerScenario = async (scenarioId) => {
     setLoading(true);
+    setCurrentScenario(scenarioId);
     try {
       const data = await callApi('/incident/trigger', {
         method: 'POST',

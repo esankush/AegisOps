@@ -47,7 +47,11 @@ export default function Header({
             <span className="text-slate-400 font-medium">Scenario:</span>
             <select
               value={currentScenario}
-              onChange={(e) => onSelectScenario(e.target.value)}
+              onChange={(e) => {
+                const newId = e.target.value;
+                onSelectScenario(newId);
+                onTriggerScenario(newId);
+              }}
               className="bg-transparent text-slate-100 font-medium border-none focus:outline-none cursor-pointer pr-2"
             >
               {scenarios.map((sc) => (
@@ -62,9 +66,10 @@ export default function Header({
             onClick={() => onTriggerScenario(currentScenario)}
             disabled={loading}
             className="flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-semibold uppercase tracking-wider text-white bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 active:scale-95 transition-all shadow-[0_0_15px_rgba(244,63,94,0.35)] disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Re-run this scenario"
           >
             <Flame className="w-3.5 h-3.5" />
-            <span>{loading ? "Synthesizing..." : "Inject Outage"}</span>
+            <span>{loading ? "Synthesizing..." : "Re-Run Outage"}</span>
           </button>
 
           {/* Primary Action: Paste Logs with Auto-Detection */}
