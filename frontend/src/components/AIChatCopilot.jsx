@@ -5,7 +5,7 @@ const SUGGESTIONS = [
   "Explain root cause in simple terms",
   "Is the hotfix safe to execute?",
   "How does the clock drift normalizer work?",
-  "How do I fix this manually in Linux terminal?"
+  "What are the recommended action steps?"
 ];
 
 export default function AIChatCopilot({ incident }) {
